@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>台股估值追蹤 — 上市／上櫃／興櫃 P/E、P/S 與成長率</title>
+<meta name="description" content="台灣股市上市、上櫃、興櫃三個板塊的本益比、股價營收比、月營收年增率與獲利成長率，資料取自證交所與櫃買中心官方開放資料，每交易日自動更新。">
+<link rel="stylesheet" href="assets/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>📈</text></svg>">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <h1>台股估值追蹤</h1>
+    <span class="asof" id="asof">載入中…</span>
+    <button class="theme-toggle" id="themeToggle" type="button">切換深淺色</button>
+  </header>
+  <p class="sub">
+    上市、上櫃、興櫃三個板塊的本益比與股價營收比，加上最新月份的營收年增率、累計年增率與獲利成長率。
+    資料全部取自證交所與櫃買中心的官方開放資料，每個交易日自動更新。
+  </p>
+
+  <!-- ============ 市場總覽 ============ -->
+  <section>
+    <h2>市場估值水準</h2>
+    <p class="note">
+      各板塊成分股的中位數。用中位數而非市值加權，是因為官方開放資料只提供最新的在外流通股數，
+      用它回推歷史市值會因增減資而失真；中位數不需要股數，三個板塊的口徑也一致。
+    </p>
+    <div class="tiles" id="tiles"></div>
+  </section>
+
+  <!-- ============ 歷年走勢 ============ -->
+  <section>
+    <h2>各年度估值走勢</h2>
+    <p class="note" id="histNote">每月月底交易日的全市場快照，取中位數。</p>
+    <div class="card">
+      <div class="chart-head">
+        <div class="legend" id="legend"></div>
+        <div class="seg" id="metricSeg" role="group" aria-label="選擇指標">
+          <button type="button" data-metric="pe" aria-pressed="true">本益比</button>
+          <button type="button" data-metric="pb" aria-pressed="false">股價淨值比</button>
+          <button type="button" data-metric="dy" aria-pressed="false">殖利率</button>
+        </div>
+        <div class="seg" id="rangeSeg" role="group" aria-label="選擇期間">
+          <button type="button" data-range="60" aria-pressed="false">近 5 年</button>
+          <button type="button" data-range="120" aria-pressed="true">近 10 年</button>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <div class="chart-scroll"><svg class="chart" id="histChart" role="img" aria-label="各市場估值歷年走勢"></svg></div>
+        <div class="tooltip" id="histTip" hidden></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 個股表 ============ -->
+  <section>
+    <h2>個股指標</h2>
+    <p class="note">
+      點任一列可看該股的歷史估值與營收明細。P/S 為自行計算（市值 ÷ 近十二個月營收），
+      標示「估」表示去年全年營收尚在累積、以去年同期的季節比例推估。
+    </p>
+    <div class="filters">
+      <input type="search" id="q" placeholder="搜尋代號或名稱" aria-label="搜尋代號或名稱">
+      <div class="seg" id="marketSeg" role="group" aria-label="選擇市場">
+        <button type="button" data-market="" aria-pressed="true">全部</button>
+        <button type="button" data-market="listed" aria-pressed="false">上市</button>
+        <button type="button" data-market="otc" aria-pressed="false">上櫃</button>
+        <button type="button" data-market="esb" aria-pressed="false">興櫃</button>
+      </div>
+      <select id="industry" aria-label="選擇產業"><option value="">所有產業</option></select>
+      <span class="count" id="count"></span>
+    </div>
+    <div class="table-scroll">
+      <table id="tbl">
+        <thead><tr id="thead"></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <button class="more" id="more" type="button" hidden>顯示更多</button>
+  </section>
+
+  <footer>
+    <p>
+      資料來源：<a href="https://openapi.twse.com.tw/" rel="noopener">臺灣證券交易所 OpenAPI</a>、
+      <a href="https://www.tpex.org.tw/openapi/" rel="noopener">證券櫃檯買賣中心 OpenAPI</a>。
+      本站僅整理公開資料，不構成投資建議。
+      <a href="https://github.com/roseamyclara/tw-stock-valuation" rel="noopener">原始碼</a>
+    </p>
+    <p id="coverage"></p>
+  </footer>
+</div>
+
+<script src="assets/app.js"></script>
+</body>
+</html>

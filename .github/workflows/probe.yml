@@ -5,6 +5,9 @@ name: 端點探測
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   probe:
     runs-on: ubuntu-latest
@@ -23,9 +26,13 @@ jobs:
         working-directory: scripts
         run: python probe.py
 
-      - name: 上傳報告
+      - name: 把報告 commit 回 repo
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: probe-report
-          path: scripts/probe-report.md
+        run: |
+          mkdir -p reports
+          mv scripts/probe-report.md reports/probe-report.md
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reports/probe-report.md
+          git diff --staged --quiet || git commit -m "端點探測報告 $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push

@@ -153,6 +153,17 @@ def main() -> None:
             lines.append(f"  - 樣本：`{res['sample']}`")
     lines.append("")
 
+    # 歷史月營收是算 P/S 歷史的關鍵，官方 OpenAPI 只給最新一期。
+    # 政府資料開放平臺可能有可下載的歷史檔，這裡問一下它的 API。
+    lines += ["## 政府資料開放平臺（找歷史月營收）", ""]
+    for ds in ("18420", "25036"):
+        url = f"https://data.gov.tw/api/v2/rest/dataset/{ds}"
+        res = probe(url)
+        lines.append(f"- `{url}` — status {res['status']}")
+        if res["ok"]:
+            lines.append(f"  - 樣本：`{res['sample']}`")
+    lines.append("")
+
     report = "\n".join(lines)
     print(report)
     with open("probe-report.md", "w", encoding="utf-8") as fh:
