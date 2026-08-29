@@ -1,0 +1,26 @@
+{
+ "asOf": "2026-08-28",
+ "markets": {
+  "listed": {
+   "label": "上市",
+   "count": 1089,
+   "cap": 151133341108367,
+   "pe": 25.54,
+   "ps": 2.87
+  },
+  "otc": {
+   "label": "上櫃",
+   "count": 890,
+   "cap": null,
+   "pe": null,
+   "ps": null
+  },
+  "esb": {
+   "label": "興櫃",
+   "count": 363,
+   "cap": null,
+   "pe": null,
+   "ps": null
+  }
+ }
+}

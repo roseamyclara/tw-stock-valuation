@@ -1,0 +1,21 @@
+{
+ "listed_profile": "https://openapi.twse.com.tw/v1/opendata/t187ap03_L",
+ "listed_revenue": "https://openapi.twse.com.tw/v1/opendata/t187ap05_L",
+ "listed_income_ci": "https://openapi.twse.com.tw/v1/opendata/t187ap06_L_ci",
+ "listed_income_basi": "https://openapi.twse.com.tw/v1/opendata/t187ap06_L_basi",
+ "listed_income_bd": "https://openapi.twse.com.tw/v1/opendata/t187ap06_L_bd",
+ "listed_income_fh": "https://openapi.twse.com.tw/v1/opendata/t187ap06_L_fh",
+ "listed_income_ins": "https://openapi.twse.com.tw/v1/opendata/t187ap06_L_ins",
+ "otc_quotes": "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes",
+ "otc_profile": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O",
+ "otc_pe": "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis",
+ "otc_revenue": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O",
+ "otc_income_ci": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap06_O_ci",
+ "otc_income_basi": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap06_O_basi",
+ "otc_income_bd": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap06_O_bd",
+ "otc_income_fh": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap06_O_fh",
+ "otc_income_ins": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap06_O_ins",
+ "esb_quotes": "https://www.tpex.org.tw/openapi/v1/tpex_esb_latest_statistics",
+ "esb_profile": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_R",
+ "esb_revenue": "https://www.tpex.org.tw/openapi/v1/t187ap05_R"
+}
