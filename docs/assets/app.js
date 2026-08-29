@@ -184,13 +184,18 @@
     $("tiles").innerHTML = MARKETS.map((k) => {
       const d = (m && m[k]) || {};
       const n = counts[k] || d.count || 0;
+      const weighted = [
+        d.peWeighted ? `本益比 ${fmt(d.peWeighted)}` : null,
+        d.psWeighted ? `股價營收比 ${fmt(d.psWeighted)}` : null,
+      ].filter(Boolean).join("、");
       return `<div class="tile">
         <div class="name"><span class="swatch" style="background:${SERIES[k]}"></span>${LABEL[k]}</div>
         <div class="figs">
-          <div class="fig"><div class="v">${fmt(d.pe) ?? "—"}</div><div class="k">本益比</div></div>
-          <div class="fig"><div class="v">${fmt(d.ps) ?? "—"}</div><div class="k">股價營收比</div></div>
+          <div class="fig"><div class="v">${fmt(d.pe) ?? "—"}</div><div class="k">本益比中位數</div></div>
+          <div class="fig"><div class="v">${fmt(d.ps) ?? "—"}</div><div class="k">股價營收比中位數</div></div>
         </div>
         <div class="cnt">${n} 檔${d.cap ? "・總市值 " + human(d.cap) : ""}</div>
+        ${weighted ? `<div class="cnt">市值加權：${weighted}</div>` : ""}
       </div>`;
     }).join("");
   }

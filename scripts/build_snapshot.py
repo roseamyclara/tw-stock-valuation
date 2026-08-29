@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import sys
+from statistics import median
 from typing import Any
 
 import markets as M
@@ -31,9 +32,10 @@ from util import (
 def _shares_from(rows: list[dict], code_keys: tuple[str, ...]) -> dict[str, dict]:
     """從公司基本資料取股數；沒有股數欄位時用實收資本額 ÷ 面額回推。"""
     out: dict[str, dict] = {}
+    # 證交所用中文欄位、櫃買中心用英文欄位，兩邊拼法也不同，一併吸收
     share_keys = ("已發行普通股數或TDR原股發行股數", "已發行普通股數或TDR原發行股數",
-                  "已發行普通股數", "IssuedShares", "OutstandingShares")
-    cap_keys = ("實收資本額", "Capitals", "CapitalStock", "PaidInCapital")
+                  "已發行普通股數", "IssueShares", "IssuedShares", "OutstandingShares")
+    cap_keys = ("實收資本額", "Paidin.Capital.NTDollars", "Capitals", "CapitalStock", "PaidInCapital")
     for r in rows:
         code = ""
         for k in code_keys:
@@ -56,7 +58,7 @@ def _shares_from(rows: list[dict], code_keys: tuple[str, ...]) -> dict[str, dict
                         shares = cap / M.PAR_VALUE
                         break
         name = ""
-        for k in ("公司簡稱", "CompanyAbbreviation", "公司名稱", "CompanyName"):
+        for k in ("公司簡稱", "CompanyAbbreviation", "Symbol", "公司名稱", "CompanyName"):
             if r.get(k):
                 name = str(r[k]).strip()
                 break
@@ -280,23 +282,30 @@ def update_fundamentals(stocks: dict[str, dict]) -> None:
 
 
 def market_aggregate(rows: list[dict]) -> dict:
-    """三市場加總估值：總市值 / 總淨利、總市值 / 總營收。
+    """三市場的估值水準：成分股的中位數。
 
-    用成分股加總計算，三個市場口徑一致，也不受個股極端值影響。
+    刻意用中位數而非市值加權，理由有二：一是與歷年走勢圖同口徑（歷史缺少當時的
+    在外流通股數，加權算不出來），二是中位數不會被少數超大型股拉著走。
+    另外附上市值加權值供對照。
     """
     agg: dict[str, dict] = {}
     for m in M.MARKETS:
         sel = [s for s in rows if s["m"] == m]
+        pes = sorted(s["pe"] for s in sel if s.get("pe"))
+        pss = sorted(s["ps"] for s in sel if s.get("ps"))
         cap = sum(s["cap"] for s in sel if s.get("cap"))
-        # 個股 P/E 反推淨利：市值 / P/E
         earnings = sum(s["cap"] / s["pe"] for s in sel if s.get("cap") and s.get("pe"))
         sales = sum(s["cap"] / s["ps"] for s in sel if s.get("cap") and s.get("ps"))
         agg[m] = {
             "label": M.MARKET_LABEL[m],
             "count": len(sel),
             "cap": round(cap) if cap else None,
-            "pe": rnd(cap / earnings) if earnings else None,
-            "ps": rnd(cap / sales) if sales else None,
+            "pe": rnd(median(pes)) if pes else None,
+            "ps": rnd(median(pss)) if pss else None,
+            "peWeighted": rnd(cap / earnings) if earnings else None,
+            "psWeighted": rnd(cap / sales) if sales else None,
+            "withPE": len(pes),
+            "withPS": len(pss),
         }
     return agg
 
