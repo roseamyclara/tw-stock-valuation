@@ -154,14 +154,31 @@ thead th {
   text-align: right; font-weight: 600; font-size: 12px; color: var(--text-secondary);
   padding: 9px 10px; white-space: nowrap; border-bottom: 1px solid var(--border); cursor: pointer;
 }
-thead th:first-child, thead th:nth-child(2) { text-align: left; }
+thead th:first-child, thead th:nth-child(2), thead th:nth-child(3) { text-align: left; }
 thead th[aria-sort="ascending"]::after { content: " ▲"; color: var(--muted); }
 thead th[aria-sort="descending"]::after { content: " ▼"; color: var(--muted); }
 tbody td {
   padding: 8px 10px; text-align: right; white-space: nowrap;
   font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--grid);
 }
-tbody td:first-child, tbody td:nth-child(2) { text-align: left; font-variant-numeric: normal; }
+tbody td:first-child, tbody td:nth-child(2), tbody td.ind { text-align: left; font-variant-numeric: normal; }
+
+/* 產業標籤：點了就篩選同產業 */
+.tag {
+  font: inherit; font-size: 11.5px; line-height: 1.4;
+  padding: 2px 7px; border-radius: 4px; cursor: pointer;
+  background: var(--chip); color: var(--text-secondary);
+  border: 1px solid transparent; white-space: nowrap;
+}
+.tag:hover { border-color: var(--border); color: var(--text-primary); }
+
+.links {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px;
+  margin: -8px 0 22px; font-size: 12.5px;
+}
+.links .k { color: var(--muted); }
+.links a { color: var(--series-1); text-decoration: none; }
+.links a:hover { text-decoration: underline; }
 tbody tr:hover { background: var(--chip); }
 tbody tr { cursor: pointer; }
 td.code { font-variant-numeric: tabular-nums; color: var(--text-secondary); }

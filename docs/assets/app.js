@@ -9,6 +9,27 @@
   const METRIC_LABEL = { pe: "本益比", pb: "股價淨值比", dy: "殖利率" };
   const UNIT = { pe: "倍", pb: "倍", dy: "%" };
 
+  // 公開資訊觀測站的市場代碼
+  const MOPS_TYPE = { listed: "sii", otc: "otc", esb: "rotc" };
+
+  // 官方開放資料的「產業別」→ 產業價值鏈資訊平台對應的產業鏈說明頁。
+  // 只是連結，不是把對方的分類抄過來：他們的使用條款禁止重製與散布其內容。
+  const CHAIN = {
+    半導體業: "D000", 電腦及週邊設備業: "F000", 光電業: "G000", 通信網路業: "I000",
+    電子零組件業: "J000", 資訊服務業: "R000", 其他電子業: "X000",
+    生技醫療業: "C100", 農業科技: "C300",
+    水泥工業: "1000", 食品工業: "M000", 塑膠工業: "N000", 化學工業: "N000",
+    橡膠工業: "N000", 紡織纖維: "O000", 電機機械: "P000", 電器電纜: "P000",
+    造紙工業: "2000", 鋼鐵工業: "Q000", 汽車工業: "3000",
+    建材營造業: "S000", 航運業: "T000", 觀光餐旅: "B000", 觀光事業: "B000",
+    金融保險業: "U000", 貿易百貨業: "V000", 油電燃氣業: "W000",
+    文化創意業: "Y000", 電子商務: "R300", 數位雲端: "5400", 運動休閒: "5800",
+    居家生活: "V000", 玻璃陶瓷: "X000", 綜合: "X000", 其他業: "X000", 其他: "X000",
+  };
+
+  const chainUrl = (ind) => (CHAIN[ind] ? `https://ic.tpex.org.tw/introduce.php?ic=${CHAIN[ind]}` : null);
+  const mopsUrl = (r) => `https://mopsov.twse.com.tw/mops/web/t05st03?TYPEK=${MOPS_TYPE[r.m] || "sii"}&co_id=${r.c}`;
+
   const state = {
     rows: [], view: [], meta: null, market: null, hist: null,
     sortKey: "cap", sortDir: -1, filterMarket: "", industry: "", q: "",
@@ -225,6 +246,10 @@
   const COLS = [
     { k: "c", t: "代號", cls: "code", get: (r) => r.c },
     { k: "n", t: "名稱", get: (r) => `${r.n} <span class="mkt">${LABEL[r.m]}</span>` },
+    {
+      k: "i", t: "產業", cls: "ind",
+      get: (r) => (r.i ? `<button type="button" class="tag" data-ind="${r.i}">${r.i}</button>` : '<span class="na">—</span>'),
+    },
     { k: "p", t: "股價", get: (r) => cell(r.p) },
     { k: "cap", t: "市值", get: (r) => human(r.cap) ?? '<span class="na">—</span>' },
     { k: "pe", t: "本益比", get: (r) => cell(r.pe) },
@@ -288,7 +313,19 @@
     $("count").textContent = `${state.view.length} 檔`;
     $("more").hidden = state.view.length <= state.shown;
     $("tbody").querySelectorAll("tr").forEach((tr) =>
-      tr.addEventListener("click", () => openStock(tr.dataset.c))
+      tr.addEventListener("click", (e) => {
+        // 點產業標籤是篩選，不是打開個股
+        const tag = e.target.closest(".tag");
+        if (tag) {
+          e.stopPropagation();
+          state.industry = state.industry === tag.dataset.ind ? "" : tag.dataset.ind;
+          $("industry").value = state.industry;
+          state.shown = 200;
+          applyFilters();
+          return;
+        }
+        openStock(tr.dataset.c);
+      })
     );
   }
 
@@ -315,6 +352,11 @@
         <div><div class="k">股價營收比</div><div class="v">${fmt(base.ps) ?? "—"}</div></div>
         <div><div class="k">淨值比</div><div class="v">${fmt(base.pb) ?? "—"}</div></div>
         <div><div class="k">市值</div><div class="v">${human(base.cap) ?? "—"}</div></div>
+      </div>
+      <div class="links">
+        <span class="k">這家公司在做什麼：</span>
+        <a href="${mopsUrl(base)}" target="_blank" rel="noopener">公開資訊觀測站・公司基本資料</a>
+        ${chainUrl(base.i) ? `<a href="${chainUrl(base.i)}" target="_blank" rel="noopener">產業價值鏈・${base.i}產業鏈</a>` : ""}
       </div>
       <h2>營收</h2>
       <p class="note">最新月份 ${rev.ym || "—"}${
