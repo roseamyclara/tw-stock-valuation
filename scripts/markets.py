@@ -76,17 +76,52 @@ def norm_profile_from_capital(rows: list[dict], code_key: str, name_key: str, ca
 
 # ---------------------------------------------------------------- 估值
 
-def norm_valuation_listed(rows: list[dict]) -> dict[str, dict]:
-    """上市：BWIBBU_ALL"""
-    return {
-        str(r.get("Code", "")).strip(): {
-            "pe": pos(r.get("PEratio")),
-            "pb": pos(r.get("PBratio")),
-            "dy": num(r.get("DividendYield")),
+def norm_daily_listed(rows: list[dict]) -> dict[str, dict]:
+    """上市 BWIBBU_d：一支端點同時給名稱、收盤價、本益比、淨值比、殖利率。"""
+    out = {}
+    for r in rows:
+        code = str(_first(r, "證券代號", "Code") or "").strip().strip('="')
+        if not code:
+            continue
+        out[code] = {
+            "name": str(_first(r, "證券名稱", "Name") or "").strip(),
+            "price": num(_first(r, "收盤價")),
+            "pe": pos(_first(r, "本益比")),
+            "pb": pos(_first(r, "股價淨值比")),
+            "dy": num(_first(r, "殖利率(%)")),
         }
-        for r in rows
-        if str(r.get("Code", "")).strip()
-    }
+    return out
+
+
+def norm_daily_otc_pe(rows: list[dict]) -> dict[str, dict]:
+    """上櫃 pera_result.php：本益比、殖利率、股價淨值比。"""
+    out = {}
+    for r in rows:
+        code = str(_first(r, "股票代號", "代號", "SecuritiesCompanyCode") or "").strip().strip('="')
+        if not code:
+            continue
+        out[code] = {
+            "name": str(_first(r, "公司名稱", "名稱") or "").strip(),
+            "pe": pos(_first(r, "本益比", "PriceEarningRatio")),
+            "pb": pos(_first(r, "股價淨值比", "PriceBookRatio")),
+            "dy": num(_first(r, "殖利率(%)", "YieldRatio")),
+        }
+    return out
+
+
+def norm_daily_otc_px(rows: list[dict]) -> dict[str, dict]:
+    """上櫃 stk_quote_result.php：收盤價與發行股數。"""
+    out = {}
+    for r in rows:
+        code = str(_first(r, "代號", "SecuritiesCompanyCode") or "").strip().strip('="')
+        if not code:
+            continue
+        out[code] = {
+            "name": str(_first(r, "名稱", "CompanyName") or "").strip(),
+            "price": num(_first(r, "收盤", "Close")) or num(_first(r, "均價", "Average")),
+            "shares": num(_first(r, "發行股數")),
+        }
+    return out
 
 
 def norm_valuation_otc(rows: list[dict]) -> dict[str, dict]:

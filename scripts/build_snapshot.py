@@ -17,10 +17,10 @@ from util import (
     log,
     month_key,
     now_taipei,
+    num,
     pct_change,
     read_json,
     rnd,
-    roc_to_date,
     roc_ym,
     write_json,
 )
@@ -28,8 +28,44 @@ from util import (
 
 # --------------------------------------------------------------- 抓取三市場
 
-def gather() -> tuple[dict[str, dict], dict[str, Any]]:
-    """回傳 (以股票代號為 key 的個股資料, 來源狀態)。"""
+def _shares_from(rows: list[dict], code_keys: tuple[str, ...]) -> dict[str, dict]:
+    """從公司基本資料取股數；沒有股數欄位時用實收資本額 ÷ 面額回推。"""
+    out: dict[str, dict] = {}
+    share_keys = ("已發行普通股數或TDR原股發行股數", "已發行普通股數或TDR原發行股數",
+                  "已發行普通股數", "IssuedShares", "OutstandingShares")
+    cap_keys = ("實收資本額", "Capitals", "CapitalStock", "PaidInCapital")
+    for r in rows:
+        code = ""
+        for k in code_keys:
+            if r.get(k):
+                code = str(r[k]).strip()
+                break
+        if not code:
+            continue
+        shares = None
+        for k in share_keys:
+            if r.get(k) is not None:
+                shares = num(r[k])
+                if shares:
+                    break
+        if not shares:
+            for k in cap_keys:
+                if r.get(k) is not None:
+                    cap = num(r[k])
+                    if cap:
+                        shares = cap / M.PAR_VALUE
+                        break
+        name = ""
+        for k in ("公司簡稱", "CompanyAbbreviation", "公司名稱", "CompanyName"):
+            if r.get(k):
+                name = str(r[k]).strip()
+                break
+        out[code] = {"code": code, "name": name, "shares": shares}
+    return out
+
+
+def gather() -> tuple[dict[str, dict], dict[str, Any], Any]:
+    """回傳 (個股資料, 來源狀態, 資料日期)。"""
     stocks: dict[str, dict] = {}
     status: dict[str, Any] = {}
 
@@ -38,71 +74,67 @@ def gather() -> tuple[dict[str, dict], dict[str, Any]]:
         return rows
 
     # ---------------- 上市 ----------------
+    # BWIBBU_d 一支就給名稱、收盤價、本益比、淨值比、殖利率
     log("上市…")
-    profile = M.norm_profile_listed(note("listed_profile", S.fetch("listed_profile")))
-    price = M.norm_price_listed(note("listed_price", S.fetch("listed_price")))
-    val = M.norm_valuation_listed(note("listed_pe", S.fetch("listed_pe")))
+    day, daily = S.latest_trading_day("listed")
+    note("listed_daily", daily)
+    val = M.norm_daily_listed(daily)
+    profile = _shares_from(note("listed_profile", S.fetch("listed_profile")), ("公司代號", "Code"))
     rev = M.norm_revenue(note("listed_revenue", S.fetch("listed_revenue")))
     inc = M.norm_income(note("listed_income", S.fetch_income("listed")))
-    merge(stocks, "listed", profile, price, val, rev, inc)
+    merge(stocks, "listed", profile, val, rev, inc)
 
     # ---------------- 上櫃 ----------------
     log("上櫃…")
     quotes = note("otc_quotes", S.fetch("otc_quotes"))
-    profile = M.norm_profile_from_capital(
-        quotes, "SecuritiesCompanyCode", "CompanyName", "Capitals"
-    )
-    price = M.norm_price_otc(quotes)
-    val = M.norm_valuation_otc(note("otc_pe", S.fetch("otc_pe")))
+    profile = _shares_from(note("otc_profile", S.fetch("otc_profile")), ("公司代號", "SecuritiesCompanyCode", "Code"))
+    if not profile:
+        profile = M.norm_profile_from_capital(quotes, "SecuritiesCompanyCode", "CompanyName", "Capitals")
+    val = {}
+    for r in quotes:
+        code = str(r.get("SecuritiesCompanyCode", "")).strip()
+        if code:
+            val[code] = {"name": str(r.get("CompanyName", "")).strip(),
+                         "price": num(r.get("Close")) or num(r.get("Average"))}
+    for code, v in M.norm_valuation_otc(note("otc_pe", S.fetch("otc_pe"))).items():
+        val.setdefault(code, {}).update(v)
     rev = M.norm_revenue(note("otc_revenue", S.fetch("otc_revenue")))
     inc = M.norm_income(note("otc_income", S.fetch_income("otc")))
-    merge(stocks, "otc", profile, price, val, rev, inc)
+    merge(stocks, "otc", profile, val, rev, inc)
 
     # ---------------- 興櫃 ----------------
+    # 官方未發布興櫃的綜合損益表，所以興櫃沒有獲利成長率。
+    # 興櫃也沒有收盤價的概念，這裡用當日均價。
     log("興櫃…")
     esb = note("esb_quotes", S.fetch("esb_quotes"))
-    price = M.norm_price_esb(esb)
-    # 興櫃報價表沒有股本欄位，改由公司基本資料補；抓不到就只有價格沒有市值
-    esb_profile_rows = note("esb_profile", S.fetch("esb_profile"))
-    profile = {}
-    if esb_profile_rows:
-        for cap_key in ("Capitals", "實收資本額", "IssuedShares", "已發行普通股數"):
-            if any(cap_key in r for r in esb_profile_rows[:5]):
-                profile = M.norm_profile_from_capital(
-                    esb_profile_rows,
-                    "SecuritiesCompanyCode" if "SecuritiesCompanyCode" in esb_profile_rows[0] else "公司代號",
-                    "CompanyName" if "CompanyName" in esb_profile_rows[0] else "公司名稱",
-                    cap_key,
-                )
-                break
-    if not profile:
-        profile = {
-            str(r.get("SecuritiesCompanyCode", "")).strip(): {
-                "code": str(r.get("SecuritiesCompanyCode", "")).strip(),
-                "name": str(r.get("CompanyName", "")).strip(),
-                "shares": None,
-            }
-            for r in esb
-            if str(r.get("SecuritiesCompanyCode", "")).strip()
-        }
+    profile = _shares_from(note("esb_profile", S.fetch("esb_profile")), ("公司代號", "SecuritiesCompanyCode", "Code"))
+    val = {}
+    for r in esb:
+        code = str(r.get("SecuritiesCompanyCode", "")).strip()
+        if code:
+            val[code] = {"name": str(r.get("CompanyName", "")).strip(),
+                         "price": num(r.get("Average")) or num(r.get("LatestPrice"))
+                                  or num(r.get("PreviousAveragePrice"))}
     rev = M.norm_revenue(note("esb_revenue", S.fetch("esb_revenue")))
-    inc = M.norm_income(note("esb_income", S.fetch_income("esb")))
-    merge(stocks, "esb", profile, price, {}, rev, inc)
+    merge(stocks, "esb", profile, val, rev, {})
 
-    return stocks, status
+    return stocks, status, day
 
 
 def merge(
     stocks: dict[str, dict],
     market: str,
     profile: dict[str, dict],
-    price: dict[str, float],
     val: dict[str, dict],
     rev: dict[str, dict],
     inc: dict[str, dict],
 ) -> None:
-    """把同一市場的各項資料合併成個股紀錄。"""
-    codes = set(profile) | set(price) | set(rev)
+    """把同一市場的各項資料合併成個股紀錄。
+
+    val 是當日報價與估值（名稱／收盤價／本益比／淨值比／殖利率），
+    profile 提供股數，rev 是月營收，inc 是綜合損益表。
+    """
+    codes = set(profile) | set(val) | set(rev)
     for code in codes:
         # 濾掉 ETF / 權證 / 受益證券：只留 4 位數純數字的普通股代號
         if not (len(code) == 4 and code.isdigit()):
@@ -112,8 +144,8 @@ def merge(
         v = val.get(code, {})
         i = inc.get(code, {})
 
-        name = p.get("name") or r.get("name") or ""
-        px = price.get(code)
+        name = p.get("name") or v.get("name") or r.get("name") or ""
+        px = v.get("price")
         shares = p.get("shares")
         cap = px * shares if (px and shares) else None
 
@@ -272,23 +304,14 @@ def market_aggregate(rows: list[dict]) -> dict:
 # --------------------------------------------------------------- 主流程
 
 def main() -> int:
-    stocks, status = gather()
+    stocks, status, day = gather()
     if not stocks:
         log("錯誤：完全沒有抓到任何個股資料")
         return 1
 
     update_fundamentals(stocks)
     rows = finalise(stocks)
-
-    # 資料日期取自上市報價（最權威的一個）
-    data_date = None
-    for key in ("listed_price", "listed_pe"):
-        if status.get(key):
-            break
-    raw = S.fetch("listed_pe")
-    if raw:
-        d = roc_to_date(str(raw[0].get("Date", "")))
-        data_date = d.isoformat() if d else None
+    data_date = day.isoformat() if day else None
 
     write_json(DATA_DIR / "latest.json", rows)
     write_json(

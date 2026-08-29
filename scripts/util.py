@@ -41,39 +41,110 @@ class FetchError(RuntimeError):
     pass
 
 
+class Throttled(FetchError):
+    """官方站台的流量保護頁。等一下再試就會過。"""
+
+
+# 站台的流量保護會回一頁 HTML 而不是 HTTP 429，只能靠內容辨識。
+_THROTTLE_MARKERS = (
+    "因為安全性考量",
+    "無法呈現",
+    "Access Denied",
+    "請稍後再試",
+)
+
+# 每個主機的最小請求間隔（秒）。證交所的 OpenAPI 對連續請求特別敏感，
+# 連打二十幾個端點就會被擋，所以刻意放慢。
+_MIN_INTERVAL = {
+    "openapi.twse.com.tw": 4.0,
+    "www.twse.com.tw": 1.5,
+    "www.tpex.org.tw": 1.0,
+}
+_last_hit: dict[str, float] = {}
+
+
+def _wait_turn(url: str) -> None:
+    host = url.split("/")[2] if "//" in url else url
+    gap = _MIN_INTERVAL.get(host, 0.8)
+    prev = _last_hit.get(host)
+    if prev is not None:
+        wait = gap - (time.monotonic() - prev)
+        if wait > 0:
+            time.sleep(wait)
+    _last_hit[host] = time.monotonic()
+
+
 def get_json(
     url: str,
     *,
     params: dict[str, Any] | None = None,
-    tries: int = 4,
+    tries: int = 5,
     timeout: int = 45,
     referer: str | None = None,
-    pause: float = 0.6,
 ) -> Any:
-    """抓 JSON。失敗時指數退避重試；仍失敗則丟 FetchError。
-
-    對官方站台保持禮貌：每次請求之間至少間隔 `pause` 秒。
-    """
+    """抓 JSON。被流量保護擋下時退避重試；仍失敗則丟 FetchError。"""
     headers = {"Referer": referer} if referer else {}
     last: Exception | None = None
     for attempt in range(tries):
         if attempt:
-            time.sleep(min(30, 2**attempt) + random.random())
+            # 被擋下時等久一點，讓對方的計數器歸零
+            time.sleep(min(90, 8 * 2 ** (attempt - 1)) + random.random() * 3)
+        _wait_turn(url)
         try:
             r = session().get(url, params=params, timeout=timeout, headers=headers)
-            if r.status_code == 200:
-                time.sleep(pause)
-                text = r.text.strip()
-                if not text:
-                    raise FetchError(f"empty body: {url}")
-                return json.loads(text)
-            # 404/403 常代表端點不存在，不值得一直重試
-            if r.status_code in (403, 404) and attempt >= 1:
-                raise FetchError(f"HTTP {r.status_code}: {url}")
-            last = FetchError(f"HTTP {r.status_code}: {url}")
-        except (requests.RequestException, json.JSONDecodeError) as exc:
+        except requests.RequestException as exc:
             last = exc
-    raise FetchError(f"{url} failed after {tries} tries: {last}")
+            continue
+
+        text = r.text.strip()
+        if r.status_code == 200 and text[:1] in ("[", "{"):
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError as exc:
+                last = exc
+                continue
+        if any(m in text for m in _THROTTLE_MARKERS):
+            last = Throttled(f"流量保護：{url}")
+            continue
+        if r.status_code in (403, 404):
+            raise FetchError(f"HTTP {r.status_code}: {url}")
+        last = FetchError(f"HTTP {r.status_code} / 非 JSON：{url}")
+    raise FetchError(f"{url} 重試 {tries} 次仍失敗：{last}")
+
+
+def rows_from_fields(payload: Any) -> list[dict[str, Any]]:
+    """把證交所 {fields, data} 或 {tables:[{fields, data}]} 轉成 list of dict。
+
+    有多張表時，挑欄位含「證券代號」且資料列最多的那一張（個股表）。
+    """
+    if isinstance(payload, list):
+        return [r for r in payload if isinstance(r, dict)]
+    if not isinstance(payload, dict):
+        return []
+
+    candidates: list[tuple[list, list]] = []
+    if payload.get("fields") and payload.get("data"):
+        candidates.append((payload["fields"], payload["data"]))
+    for t in payload.get("tables", []) or []:
+        if t.get("fields") and t.get("data"):
+            candidates.append((t["fields"], t["data"]))
+    if not candidates:
+        return []
+
+    def score(c: tuple[list, list]) -> tuple[int, int]:
+        fields = [str(f) for f in c[0]]
+        has_code = any("證券代號" in f or "股票代號" in f or f == "代號" for f in fields)
+        return (1 if has_code else 0, len(c[1]))
+
+    fields, data = max(candidates, key=score)
+    names = [str(f) for f in fields]
+    out = []
+    for row in data:
+        if isinstance(row, dict):
+            out.append(row)
+        elif isinstance(row, list):
+            out.append({names[i]: v for i, v in enumerate(row) if i < len(names)})
+    return out
 
 
 def try_json(url: str, **kw: Any) -> Any | None:
