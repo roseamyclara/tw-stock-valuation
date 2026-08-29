@@ -1,0 +1,31 @@
+name: 端點探測
+
+# 一次性診斷：實際打過每個候選端點，把可用性與欄位結構印出來。
+# 在 Actions 上跑（機房 IP 不會被官方站台的 WAF 擋）。
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: 探測
+        working-directory: scripts
+        run: python probe.py
+
+      - name: 上傳報告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-report
+          path: scripts/probe-report.md
