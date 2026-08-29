@@ -5,22 +5,34 @@
    "label": "上市",
    "count": 1089,
    "cap": 151133341108367,
-   "pe": 25.54,
-   "ps": 2.87
+   "pe": 17.38,
+   "ps": 1.81,
+   "peWeighted": 25.54,
+   "psWeighted": 2.87,
+   "withPE": 870,
+   "withPS": 1077
   },
   "otc": {
    "label": "上櫃",
    "count": 890,
-   "cap": null,
-   "pe": null,
-   "ps": null
+   "cap": 10936440320310,
+   "pe": 19.76,
+   "ps": 2.23,
+   "peWeighted": 25.37,
+   "psWeighted": 3.21,
+   "withPE": 669,
+   "withPS": 886
   },
   "esb": {
    "label": "興櫃",
    "count": 363,
-   "cap": null,
+   "cap": 1613129262480,
    "pe": null,
-   "ps": null
+   "ps": 2.7,
+   "peWeighted": null,
+   "psWeighted": 3.6,
+   "withPE": 0,
+   "withPS": 338
   }
  }
 }

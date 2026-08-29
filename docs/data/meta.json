@@ -1,6 +1,6 @@
 {
  "asOf": "2026-08-28",
- "updatedAt": "2026-08-29T20:55:53",
+ "updatedAt": "2026-08-29T20:59:07",
  "counts": {
   "listed": 1089,
   "otc": 890,
@@ -22,7 +22,7 @@
   "esb_revenue": 359
  },
  "withPE": 1539,
- "withPS": 1077,
+ "withPS": 2301,
  "withRevenue": 2333,
  "withFinancials": 1943
 }
