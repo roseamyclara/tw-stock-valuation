@@ -20,8 +20,12 @@ HIST_DIR = DATA_DIR / "history"
 
 
 def month_snapshot(y: int, m: int) -> dict | None:
-    """抓某月最後一個交易日的全市場估值。遇到假日往前退，最多退 7 天。"""
-    for back in range(8):
+    """抓某月最後一個交易日的全市場估值。遇到假日往前退，最多退 14 天。
+
+    14 天是為了跨過農曆年封關 —— 例如 2025 年 1 月 24 日到 31 日全無交易，
+    只退 8 天會整個月抓不到。
+    """
+    for back in range(15):
         d = last_business_day(y, m) - timedelta(days=back)
         if d > date.today():
             continue
