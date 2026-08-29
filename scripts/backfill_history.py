@@ -31,7 +31,9 @@ def month_snapshot(y: int, m: int) -> dict | None:
             continue  # 該日無資料（假日或休市），再往前退一天
 
         otc_pe = M.norm_daily_otc_pe(S.fetch_daily("otc_pe", d))
-        otc_px = M.norm_daily_otc_px(S.fetch_daily("otc_px", d))
+        # 上櫃的每日收盤行情 php 端點會忽略日期參數、一律回當天的價格，
+        # 存進歷史會變成「每個月都是今天的股價」，所以上櫃歷史不放價格。
+        # 本益比、淨值比、殖利率的端點則確實依日期回傳，是可信的。
 
         stocks: dict[str, list] = {}
         for code, v in listed.items():
@@ -39,8 +41,7 @@ def month_snapshot(y: int, m: int) -> dict | None:
                 stocks[code] = [rnd(v.get("pe")), rnd(v.get("pb")), rnd(v.get("dy")), rnd(v.get("price"))]
         for code, v in otc_pe.items():
             if len(code) == 4 and code.isdigit():
-                px = (otc_px.get(code) or {}).get("price")
-                stocks[code] = [rnd(v.get("pe")), rnd(v.get("pb")), rnd(v.get("dy")), rnd(px)]
+                stocks[code] = [rnd(v.get("pe")), rnd(v.get("pb")), rnd(v.get("dy")), None]
 
         log(f"  {y}-{m:02d} ({d})：上市 {len(listed)}、上櫃 {len(otc_pe)}，合計 {len(stocks)} 檔")
         return {"d": d.isoformat(), "s": stocks}
