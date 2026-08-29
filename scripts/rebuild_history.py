@@ -109,14 +109,14 @@ def main() -> None:
     for code, s in meta.items():
         hist = per_stock.get(code, [])
         fund = fundamentals.get(code, {})
+        # 刻意不放當前股價與估值：那些每天都在變，會讓這 2000 多個檔案天天進 commit。
+        # 前端要顯示當前值時直接用已經載入的 latest.json，個股檔只負責歷史，
+        # 這樣它一個月才變動一次。
         doc = {
             "c": code,
             "n": s.get("n"),
             "m": s.get("m"),
             "i": s.get("i"),
-            "now": {k: s.get(k) for k in ("p", "pe", "pb", "dy", "ps", "cap") if s.get(k) is not None},
-            "rev": s.get("rev"),
-            "fin": s.get("fin"),
             "hist": hist,
             # 只留最近 36 個月的累計營收，避免個股檔無限膨脹
             "revHist": dict(sorted((fund.get("rev_cum") or {}).items())[-36:]),

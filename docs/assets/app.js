@@ -296,12 +296,12 @@
   async function openStock(code) {
     const base = state.rows.find((r) => r.c === code);
     if (!base) return;
-    const doc = await getJSON(`data/stock/${code}.json`, null);
-    const d = doc || base;
+    // 個股檔只存歷史；當前股價與估值直接用已載入的 latest.json
+    const d = (await getJSON(`data/stock/${code}.json`, null)) || {};
+    const rev = base.rev || {}, fin = base.fin || {};
 
     const ov = document.createElement("div");
     ov.className = "overlay";
-    const rev = d.rev || {}, fin = d.fin || {};
     ov.innerHTML = `<div class="panel" role="dialog" aria-label="${base.n} 詳細">
       <div class="panel-head">
         <h3>${base.c} ${base.n}</h3>
@@ -317,7 +317,9 @@
         <div><div class="k">市值</div><div class="v">${human(base.cap) ?? "—"}</div></div>
       </div>
       <h2>營收</h2>
-      <p class="note">最新月份 ${rev.ym || "—"}</p>
+      <p class="note">最新月份 ${rev.ym || "—"}${
+        base.i && base.i.includes("金融") ? "。金融保險業的營收認列基礎與一般產業不同，成長率的擺盪幅度天生就大。" : ""
+      }</p>
       <div class="kv">
         <div><div class="k">當月營收</div><div class="v">${rev.amt != null ? human(rev.amt * 1000) : "—"}</div></div>
         <div><div class="k">年增率</div><div class="v">${cell(rev.yoy, 1, true)}</div></div>
