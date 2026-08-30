@@ -31,10 +31,12 @@
   const mopsUrl = (r) => `https://mopsov.twse.com.tw/mops/web/t05st03?TYPEK=${MOPS_TYPE[r.m] || "sii"}&co_id=${r.c}`;
 
   const state = {
-    rows: [], view: [], meta: null, market: null, hist: null,
-    sortKey: "cap", sortDir: -1, filterMarket: "", industry: "", q: "",
+    rows: [], view: [], meta: null, market: null, hist: null, tags: {},
+    sortKey: "cap", sortDir: -1, filterMarket: "", industry: "", tag: "", q: "",
     shown: 200, metric: "pe", range: 120,
   };
+
+  const tagsOf = (code) => state.tags[code] || [];
 
   // ---------------------------------------------------------------- 工具
   const fmt = (v, d = 2) =>
@@ -247,8 +249,15 @@
     { k: "c", t: "代號", cls: "code", get: (r) => r.c },
     { k: "n", t: "名稱", get: (r) => `${r.n} <span class="mkt">${LABEL[r.m]}</span>` },
     {
-      k: "i", t: "產業", cls: "ind",
-      get: (r) => (r.i ? `<button type="button" class="tag" data-ind="${r.i}">${r.i}</button>` : '<span class="na">—</span>'),
+      k: "i", t: "業務標籤", cls: "ind",
+      // 有業務標籤就顯示業務標籤；沒有的話退回官方產業別（樣式做區隔，一眼看得出來源不同）
+      get: (r) => {
+        const ts = tagsOf(r.c);
+        if (ts.length) {
+          return ts.map((t) => `<button type="button" class="tag" data-tag="${t}">${t}</button>`).join(" ");
+        }
+        return r.i ? `<button type="button" class="tag ind-tag" data-ind="${r.i}">${r.i}</button>` : '<span class="na">—</span>';
+      },
     },
     { k: "p", t: "股價", get: (r) => cell(r.p) },
     { k: "cap", t: "市值", get: (r) => human(r.cap) ?? '<span class="na">—</span>' },
@@ -288,7 +297,10 @@
     let v = state.rows.filter((r) => {
       if (state.filterMarket && r.m !== state.filterMarket) return false;
       if (state.industry && r.i !== state.industry) return false;
-      if (q && !(r.c.includes(q) || (r.n || "").toLowerCase().includes(q))) return false;
+      if (state.tag && !tagsOf(r.c).includes(state.tag)) return false;
+      // 搜尋同時比對代號、名稱與業務標籤，所以打「外籍移工」找得到統振
+      if (q && !(r.c.includes(q) || (r.n || "").toLowerCase().includes(q)
+                 || tagsOf(r.c).some((t) => t.toLowerCase().includes(q)))) return false;
       return true;
     });
     const k = state.sortKey, dir = state.sortDir;
@@ -310,15 +322,29 @@
     $("tbody").innerHTML = slice
       .map((r) => `<tr data-c="${r.c}">${COLS.map((c) => `<td class="${c.cls || ""}">${c.get(r) ?? '<span class="na">—</span>'}</td>`).join("")}</tr>`)
       .join("");
-    $("count").textContent = `${state.view.length} 檔`;
+    const active = state.tag || state.industry;
+    $("count").innerHTML = active
+      ? `<button type="button" class="clear-filter" id="clearFilter">${active} ✕</button> ${state.view.length} 檔`
+      : `${state.view.length} 檔`;
+    const cf = $("clearFilter");
+    if (cf) cf.addEventListener("click", () => {
+      state.tag = ""; state.industry = ""; $("industry").value = "";
+      state.shown = 200; applyFilters();
+    });
     $("more").hidden = state.view.length <= state.shown;
     $("tbody").querySelectorAll("tr").forEach((tr) =>
       tr.addEventListener("click", (e) => {
-        // 點產業標籤是篩選，不是打開個股
+        // 點標籤是篩選，不是打開個股。再點一次同一個就取消。
         const tag = e.target.closest(".tag");
         if (tag) {
           e.stopPropagation();
-          state.industry = state.industry === tag.dataset.ind ? "" : tag.dataset.ind;
+          if (tag.dataset.tag !== undefined) {
+            state.tag = state.tag === tag.dataset.tag ? "" : tag.dataset.tag;
+            state.industry = "";
+          } else {
+            state.industry = state.industry === tag.dataset.ind ? "" : tag.dataset.ind;
+            state.tag = "";
+          }
           $("industry").value = state.industry;
           state.shown = 200;
           applyFilters();
@@ -346,6 +372,9 @@
         <span class="asof">${base.i || ""}</span>
         <button class="close" type="button">關閉</button>
       </div>
+      ${tagsOf(base.c).length
+        ? `<div class="panel-tags">${tagsOf(base.c).map((t) => `<span class="tag static">${t}</span>`).join(" ")}</div>`
+        : ""}
       <div class="kv">
         <div><div class="k">股價</div><div class="v">${fmt(base.p) ?? "—"}</div></div>
         <div><div class="k">本益比</div><div class="v">${fmt(base.pe) ?? "—"}</div></div>
@@ -353,11 +382,9 @@
         <div><div class="k">淨值比</div><div class="v">${fmt(base.pb) ?? "—"}</div></div>
         <div><div class="k">市值</div><div class="v">${human(base.cap) ?? "—"}</div></div>
       </div>
-      <div class="links">
-        <span class="k">這家公司在做什麼：</span>
-        <a href="${mopsUrl(base)}" target="_blank" rel="noopener">公開資訊觀測站・公司基本資料</a>
-        ${chainUrl(base.i) ? `<a href="${chainUrl(base.i)}" target="_blank" rel="noopener">產業價值鏈・${base.i}產業鏈</a>` : ""}
-      </div>
+      ${chainUrl(base.i) ? `<div class="links">
+        <a href="${chainUrl(base.i)}" target="_blank" rel="noopener">${base.i}產業鏈說明</a>
+      </div>` : ""}
       <h2>營收</h2>
       <p class="note">最新月份 ${rev.ym || "—"}${
         base.i && base.i.includes("金融") ? "。金融保險業的營收認列基礎與一般產業不同，成長率的擺盪幅度天生就大。" : ""
@@ -418,13 +445,15 @@
 
   // ---------------------------------------------------------------- 啟動
   (async function init() {
-    const [meta, market, hist, rows] = await Promise.all([
+    const [meta, market, hist, rows, tags] = await Promise.all([
       getJSON("data/meta.json", null),
       getJSON("data/market.json", null),
       getJSON("data/market_history.json", null),
       getJSON("data/latest.json", []),
+      getJSON("data/tags.json", {}),
     ]);
-    state.meta = meta; state.market = market; state.hist = hist; state.rows = rows || [];
+    state.meta = meta; state.market = market; state.hist = hist;
+    state.rows = rows || []; state.tags = tags || {};
 
     $("asof").textContent = meta && meta.asOf
       ? `資料日期 ${meta.asOf}・更新於 ${(meta.updatedAt || "").replace("T", " ").slice(0, 16)}`
@@ -434,6 +463,9 @@
       $("coverage").textContent =
         `共 ${meta.total} 檔：有本益比 ${meta.withPE}、有股價營收比 ${meta.withPS}、有月營收 ${meta.withRevenue}、有財報 ${meta.withFinancials}。`;
     }
+
+    const cov = $("tagCoverage");
+    if (cov) cov.textContent = String(Object.keys(state.tags).length);
 
     const inds = [...new Set(state.rows.map((r) => r.i).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-Hant"));
     $("industry").innerHTML = '<option value="">所有產業</option>' + inds.map((i) => `<option>${i}</option>`).join("");

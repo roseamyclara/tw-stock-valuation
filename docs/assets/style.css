@@ -163,14 +163,31 @@ tbody td {
 }
 tbody td:first-child, tbody td:nth-child(2), tbody td.ind { text-align: left; font-variant-numeric: normal; }
 
-/* 產業標籤：點了就篩選同產業 */
+/* 業務標籤：點了就篩選同標籤 */
 .tag {
   font: inherit; font-size: 11.5px; line-height: 1.4;
   padding: 2px 7px; border-radius: 4px; cursor: pointer;
   background: var(--chip); color: var(--text-secondary);
   border: 1px solid transparent; white-space: nowrap;
+  display: inline-block; margin: 1px 0;
 }
 .tag:hover { border-color: var(--border); color: var(--text-primary); }
+.tag.static { cursor: default; }
+/* 沒有業務標籤時退回顯示的官方產業別，用外框與虛線區隔來源不同 */
+.tag.ind-tag {
+  background: none; border: 1px dashed var(--border); color: var(--muted);
+}
+.tag.ind-tag:hover { color: var(--text-secondary); border-style: solid; }
+
+td.ind { white-space: normal; max-width: 260px; }
+
+.clear-filter {
+  font: inherit; font-size: 12px; padding: 2px 8px; margin-right: 6px;
+  border-radius: 4px; cursor: pointer;
+  background: var(--series-1); color: #fff; border: 0;
+}
+
+.panel-tags { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 0; }
 
 .links {
   display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px;
