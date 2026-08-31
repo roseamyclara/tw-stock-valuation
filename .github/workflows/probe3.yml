@@ -1,0 +1,32 @@
+name: 端點探測三
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  probe3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: 探測
+        working-directory: scripts
+        run: python probe3.py
+      - name: commit 報告
+        if: always()
+        run: |
+          mkdir -p reports
+          mv scripts/probe3-report.md reports/probe3-report.md
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reports/probe3-report.md
+          git diff --staged --quiet || git commit -m "第三輪探測報告：每日收盤價端點"
+          git push
