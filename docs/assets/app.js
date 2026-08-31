@@ -6,8 +6,6 @@
   const MARKETS = ["listed", "otc", "esb"];
   const LABEL = { listed: "上市", otc: "上櫃", esb: "興櫃" };
   const SERIES = { listed: "var(--series-1)", otc: "var(--series-2)", esb: "var(--series-3)" };
-  const METRIC_LABEL = { pe: "本益比", pb: "股價淨值比", dy: "殖利率" };
-  const UNIT = { pe: "倍", pb: "倍", dy: "%" };
 
   // 公開資訊觀測站的市場代碼
   const MOPS_TYPE = { listed: "sii", otc: "otc", esb: "rotc" };
@@ -31,9 +29,9 @@
   const mopsUrl = (r) => `https://mopsov.twse.com.tw/mops/web/t05st03?TYPEK=${MOPS_TYPE[r.m] || "sii"}&co_id=${r.c}`;
 
   const state = {
-    rows: [], view: [], meta: null, market: null, hist: null, tags: {}, movers: null,
+    rows: [], view: [], meta: null, market: null, tags: {}, movers: null,
     sortKey: "cap", sortDir: -1, filterMarket: "", industry: "", tag: "", q: "",
-    shown: 200, metric: "pe", range: 120, period: "d1", moverMarket: "listed",
+    shown: 200, period: "d1", moverMarket: "listed",
   };
 
   const tagsOf = (code) => state.tags[code] || [];
@@ -221,27 +219,6 @@
         ${weighted ? `<div class="cnt">市值加權：${weighted}</div>` : ""}
       </div>`;
     }).join("");
-  }
-
-  // ---------------------------------------------------------------- 歷年圖
-  function renderHist() {
-    const wrap = $("histChart"), tip = $("histTip");
-    const monthly = (state.hist && state.hist.monthly) || {};
-    const keys = Object.keys(monthly).sort().slice(-state.range);
-    const series = MARKETS.map((k) => ({
-      key: k, name: LABEL[k], color: SERIES[k],
-      points: keys.map((ym) => [ym, ((monthly[ym].m || {})[k] || {})[state.metric] ?? null]),
-    })).filter((s) => s.points.some((p) => p[1] != null));
-
-    $("legend").innerHTML = series.length > 1
-      ? series.map((s) => `<span class="item"><span class="swatch" style="background:${s.color}"></span>${s.name}</span>`).join("")
-      : "";
-
-    if (!keys.length) {
-      $("histNote").textContent =
-        "歷史資料尚未回補。到 GitHub 的 Actions 頁手動執行一次「歷史回補」，即可補上近十年的逐月快照。";
-    }
-    lineChart(wrap, tip, series, { unit: UNIT[state.metric], height: 300 });
   }
 
   // ---------------------------------------------------------------- 表格
@@ -498,19 +475,18 @@
     );
   }
 
-  function draw() { renderTiles(); renderHist(); renderMovers(); }
+  function draw() { renderTiles(); renderMovers(); }
 
   // ---------------------------------------------------------------- 啟動
   (async function init() {
-    const [meta, market, hist, rows, tags, movers] = await Promise.all([
+    const [meta, market, rows, tags, movers] = await Promise.all([
       getJSON("data/meta.json", null),
       getJSON("data/market.json", null),
-      getJSON("data/market_history.json", null),
       getJSON("data/latest.json", []),
       getJSON("data/tags.json", {}),
       getJSON("data/movers.json", null),
     ]);
-    state.meta = meta; state.market = market; state.hist = hist;
+    state.meta = meta; state.market = market;
     state.rows = rows || []; state.tags = tags || {}; state.movers = movers;
 
     $("asof").textContent = meta && meta.asOf
@@ -536,8 +512,6 @@
     $("industry").addEventListener("change", (e) => { state.industry = e.target.value; state.shown = 200; applyFilters(); });
     $("more").addEventListener("click", () => { state.shown += 300; renderBody(); });
     bindSeg("marketSeg", "market", "filterMarket", () => { state.shown = 200; applyFilters(); });
-    bindSeg("metricSeg", "metric", "metric", renderHist);
-    bindSeg("rangeSeg", "range", "range", renderHist, Number);
     bindSeg("periodSeg", "period", "period", renderMovers);
     bindSeg("moverMarketSeg", "mm", "moverMarket", renderMovers);
   })();
