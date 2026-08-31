@@ -1,120 +1,94 @@
-# 第二輪探測：上市資料替代路徑
+# 第三輪探測：每日收盤價端點
 
-## 1. TPEx OpenAPI 是否代管上市／興櫃資料集
+近日 = 2026-08-28，20 個交易日前 = 2026-08-03
 
-- `https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_L`
-  - 非 JSON（23902 bytes）：<!DOCTYPE html><html lang="zh-Hant-tw"><head><title>è­å¸æ«æª¯è²·è³£ä¸­å¿</title><meta 
-- `https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_L`
-  - 非 JSON（23902 bytes）：<!DOCTYPE html><html lang="zh-Hant-tw"><head><title>è­å¸æ«æª¯è²·è³£ä¸­å¿</title><meta 
-- `https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap06_L_ci`
-  - 非 JSON（23902 bytes）：<!DOCTYPE html><html lang="zh-Hant-tw"><head><title>è­å¸æ«æª¯è²·è³£ä¸­å¿</title><meta 
-- `https://www.tpex.org.tw/openapi/v1/t187ap05_L`
-  - 非 JSON（23902 bytes）：<!DOCTYPE html><html lang="zh-Hant-tw"><head><title>è­å¸æ«æª¯è²·è³£ä¸­å¿</title><meta 
-- `https://www.tpex.org.tw/openapi/v1/t187ap03_L`
-  - 非 JSON（23902 bytes）：<!DOCTYPE html><html lang="zh-Hant-tw"><head><title>è­å¸æ«æª¯è²·è³£ä¸­å¿</title><meta 
-- `https://www.tpex.org.tw/openapi/v1/t187ap06_L_ci`
-  - 非 JSON（23902 bytes）：<!DOCTYPE html><html lang="zh-Hant-tw"><head><title>è­å¸æ«æª¯è²·è³£ä¸­å¿</title><meta 
-- `https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap06_R_ci`
-  - 非 JSON（23902 bytes）：<!DOCTYPE html><html lang="zh-Hant-tw"><head><title>è­å¸æ«æª¯è²·è³£ä¸­å¿</title><meta 
-- `https://www.tpex.org.tw/openapi/v1/t187ap06_R_ci`
-  - 非 JSON（23902 bytes）：<!DOCTYPE html><html lang="zh-Hant-tw"><head><title>è­å¸æ«æª¯è²·è³£ä¸­å¿</title><meta 
-- `https://www.tpex.org.tw/openapi/v1/t187ap03_R`
-  - 非 JSON（23902 bytes）：<!DOCTYPE html><html lang="zh-Hant-tw"><head><title>è­å¸æ«æª¯è²·è³£ä¸­å¿</title><meta 
+判準：兩個日期回傳的指紋**必須不同**，才代表這支端點真的吃日期參數。
 
-## 2. 證交所其他主機／路徑（含標頭實驗）
+## `otc_A_stk_wn1430`
+`https://www.tpex.org.tw/web/stock/aftertrading/otc_quotes_no1430/stk_wn1430_result.php?l=zh-tw&d={roc}&se=EW`
+- 近日：OK，1013 列
+- 過去：OK，1012 列
+- 判定：**吃日期 ✓**
+- 近日樣本：`[["00411A", "主動統一前沿科技", "9.84", "+0.02", "9.90", "9.90", "9.82", "26,083,000", "257,466,900", "2,960", "9.83", "163", "9.84", "147", "701,076,000", "9,999.95", "0.01"], ["00679B", "元大美債20年", "25.85", "-0.19", "25.92", "25.92", "25.81", "12,614,000", "326,218,1`
+- 過去樣本：`[["00679B", "元大美債20年", "26.42", "-0.26", "26.34", "26.43", "26.31", "33,947,000", "895,409,240", "3,126", "26.42", "639", "26.43", "1,013", "6,357,192,000", "9,999.95", "0.01"], ["00687B", "國泰20年美債", "27.51", "-0.22", "27.45", "27.51", "27.38", "35,058,000", "`
 
-- `https://mopsfin.twse.com.tw/opendata/t187ap05_L` [default]
-  - HTTP 404
-- `https://mopsfin.twse.com.tw/opendata/t187ap05_L` [with-referer]
-  - HTTP 404
-- `https://mopsfin.twse.com.tw/opendata/t187ap05_L` [plain-ua]
-  - HTTP 404
-- `https://mops.twse.com.tw/opendata/t187ap05_L` [default]
-  - HTTP 404
-- `https://mops.twse.com.tw/opendata/t187ap05_L` [with-referer]
-  - HTTP 404
-- `https://mops.twse.com.tw/opendata/t187ap05_L` [plain-ua]
-  - 非 JSON（686 bytes）：<html>
-<head>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-</head>
+## `otc_B_stk_quote`
+`https://www.tpex.org.tw/web/stock/aftertrading/daily_close_quotes/stk_quote_result.php?l=zh-tw&d={roc}`
+- 近日：OK，10713 列
+- 過去：OK，10713 列
+- 判定：**忽略日期 ✗（兩次結果相同）**
+- 近日樣本：`[["00411A", "主動統一前沿科技", "9.61", "-0.23 ", "9.64", "9.64", "9.51", "9.57", "30,048,195", "287,667,213", "5,403", "9.60", "1459", "9.61", "2968", "677,576,000", "9.61", "9999.95", "0.01"], ["006201", "元大富櫃50", "44.32", "-0.07 ", "44.20", "44.39", "43.33", "43.99`
+- 過去樣本：`[["00411A", "主動統一前沿科技", "9.61", "-0.23 ", "9.64", "9.64", "9.51", "9.57", "30,048,195", "287,667,213", "5,403", "9.60", "1459", "9.61", "2968", "677,576,000", "9.61", "9999.95", "0.01"], ["006201", "元大富櫃50", "44.32", "-0.07 ", "44.20", "44.39", "43.33", "43.99`
 
-- `https://www.twse.com.tw/rwd/zh/opendata/t187ap05_L` [default]
-  - 非 JSON（747 bytes）：<!DOCTYPE html>
-<html lang="zh-Hant-tw">
-<head>
+## `otc_C_www_otc`
+`https://www.tpex.org.tw/www/zh-tw/afterTrading/otc?date={roc}&type=EW&response=json`
+- 近日：OK，1013 列
+- 過去：OK，1012 列
+- 判定：**吃日期 ✓**
+- 近日樣本：`[["00411A", "主動統一前沿科技", "9.84", "+0.02", "9.90", "9.90", "9.82", "26,083,000", "257,466,900", "2,960", "9.83", "163", "9.84", "147", "701,076,000", "9,999.95", "0.01"], ["00679B", "元大美債20年", "25.85", "-0.19", "25.92", "25.92", "25.81", "12,614,000", "326,218,1`
+- 過去樣本：`[["00679B", "元大美債20年", "26.42", "-0.26", "26.34", "26.43", "26.31", "33,947,000", "895,409,240", "3,126", "26.42", "639", "26.43", "1,013", "6,357,192,000", "9,999.95", "0.01"], ["00687B", "國泰20年美債", "27.51", "-0.22", "27.45", "27.51", "27.38", "35,058,000", "`
 
-<meta charset="utf-8">
-<meta name="viewpo
-- `https://www.twse.com.tw/rwd/zh/opendata/t187ap05_L` [with-referer]
-  - 非 JSON（747 bytes）：<!DOCTYPE html>
-<html lang="zh-Hant-tw">
-<head>
+## `otc_D_dailyQuotes`
+`https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes?date={roc}&type=EW&response=json`
+- 近日：OK，10657 列
+- 過去：OK，10199 列
+- 判定：**吃日期 ✓**
+- 近日樣本：`[["00411A", "主動統一前沿科技", "9.84", "+0.02", "9.90", "9.90", "9.82", "9.87", "26,235,417", "258,968,980", "3,502", "9.83", "163", "9.84", "147", "701,076,000", "9.84", "9999.95", "0.01"], ["006201", "元大富櫃50", "44.39", "+0.25", "44.35", "44.70", "44.04", "44.34", "`
+- 過去樣本：`[["006201", "元大富櫃50", "39.88", "+1.81", "38.30", "40.19", "38.30", "39.77", "659,766", "26,240,241", "347", "39.86", "2", "39.88", "4", "23,446,000", "39.88", "43.86", "35.90"], ["00679B", "元大美債20年", "26.42", "-0.26 ", "26.34", "26.43", "26.31", "26.38", "34,0`
 
-<meta charset="utf-8">
-<meta name="viewpo
-- `https://www.twse.com.tw/rwd/zh/opendata/t187ap05_L` [plain-ua]
-  - 非 JSON（747 bytes）：<!DOCTYPE html>
-<html lang="zh-Hant-tw">
-<head>
+## `otc_E_otcQuote`
+`https://www.tpex.org.tw/www/zh-tw/afterTrading/otcQuote?date={roc}&response=json`
+- 近日：非 JSON：<!DOCTYPE html><html lang="zh-Hant-tw"><head><title>404 - è­å¸æ«æª¯，0 列
+- 過去：非 JSON：<!DOCTYPE html><html lang="zh-Hant-tw"><head><title>404 - è­å¸æ«æª¯，0 列
 
-<meta charset="utf-8">
-<meta name="viewpo
-- `https://www.twse.com.tw/opendata/t187ap05_L` [default]
-  - 非 JSON（747 bytes）：<!DOCTYPE html>
-<html lang="zh-Hant-tw">
-<head>
+## `otc_F_api`
+`https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes`
+- 近日：OK，10713 列
+- 過去：OK，10713 列
+- 判定：**忽略日期 ✗（兩次結果相同）**
+- 近日樣本：`[{"Date": "1150831", "SecuritiesCompanyCode": "00411A", "CompanyName": "主動統一前沿科技", "Close": "9.61", "Change": "-0.23 ", "Open": "9.64", "High": "9.64", "Low": "9.51", "Average": "9.57", "TradingShares": "30048195", "TransactionAmount": "287667213", "Transactio`
+- 過去樣本：`[{"Date": "1150831", "SecuritiesCompanyCode": "00411A", "CompanyName": "主動統一前沿科技", "Close": "9.61", "Change": "-0.23 ", "Open": "9.64", "High": "9.64", "Low": "9.51", "Average": "9.57", "TradingShares": "30048195", "TransactionAmount": "287667213", "Transactio`
 
-<meta charset="utf-8">
-<meta name="viewpo
-- `https://www.twse.com.tw/opendata/t187ap05_L` [with-referer]
-  - 非 JSON（747 bytes）：<!DOCTYPE html>
-<html lang="zh-Hant-tw">
-<head>
+## `esb_A_emdaily`
+`https://www.tpex.org.tw/web/emergingstock/aftertrading/daily_close_quotes/emdaily_result.php?l=zh-tw&d={roc}`
+- 近日：非 JSON：<!DOCTYPE html><html lang="zh-Hant-tw"><head><title>404 - è­å¸æ«æª¯，0 列
+- 過去：非 JSON：<!DOCTYPE html><html lang="zh-Hant-tw"><head><title>404 - è­å¸æ«æª¯，0 列
 
-<meta charset="utf-8">
-<meta name="viewpo
-- `https://www.twse.com.tw/opendata/t187ap05_L` [plain-ua]
-  - 非 JSON（747 bytes）：<!DOCTYPE html>
-<html lang="zh-Hant-tw">
-<head>
+## `esb_B_www_daily`
+`https://www.tpex.org.tw/www/zh-tw/emerging/dailyQuotes?date={roc}&response=json`
+- 近日：非 JSON：<!DOCTYPE html><html lang="zh-Hant-tw"><head><title>404 - è­å¸æ«æª¯，0 列
+- 過去：非 JSON：<!DOCTYPE html><html lang="zh-Hant-tw"><head><title>404 - è­å¸æ«æª¯，0 列
 
-<meta charset="utf-8">
-<meta name="viewpo
-- `https://openapi.twse.com.tw/v1/opendata/t187ap05_L` [default]
-  - 1085 筆｜欄位 ['出表日期', '資料年月', '公司代號', '公司名稱', '產業別', '營業收入-當月營收', '營業收入-上月營收', '營業收入-去年當月營收', '營業收入-上月比較增減(%)', '營業收入-去年同月增減(%)', '累計營業收入-當月累計營收', '累計營業收入-去年累計營收', '累計營業收入-前期比較增減(%)', '備註']｜樣本 {"出表日期": "1150817", "資料年月": "11507", "公司代號": "1101", "公司名稱": "台泥", "產業別": "水泥工業", "營業收入-當月營收": "13744103", "營業收入-上月營收": "13382706", "營業收入-去年當月營收": "13535929", "營業收入-上月比較增減(%)": "2.70047776585692", "營業收入-去年同月增減(%)": "1.53
-- `https://openapi.twse.com.tw/v1/opendata/t187ap05_L` [with-referer]
-  - 1085 筆｜欄位 ['出表日期', '資料年月', '公司代號', '公司名稱', '產業別', '營業收入-當月營收', '營業收入-上月營收', '營業收入-去年當月營收', '營業收入-上月比較增減(%)', '營業收入-去年同月增減(%)', '累計營業收入-當月累計營收', '累計營業收入-去年累計營收', '累計營業收入-前期比較增減(%)', '備註']｜樣本 {"出表日期": "1150817", "資料年月": "11507", "公司代號": "1101", "公司名稱": "台泥", "產業別": "水泥工業", "營業收入-當月營收": "13744103", "營業收入-上月營收": "13382706", "營業收入-去年當月營收": "13535929", "營業收入-上月比較增減(%)": "2.70047776585692", "營業收入-去年同月增減(%)": "1.53
-- `https://openapi.twse.com.tw/v1/opendata/t187ap05_L` [plain-ua]
-  - 1085 筆｜欄位 ['出表日期', '資料年月', '公司代號', '公司名稱', '產業別', '營業收入-當月營收', '營業收入-上月營收', '營業收入-去年當月營收', '營業收入-上月比較增減(%)', '營業收入-去年同月增減(%)', '累計營業收入-當月累計營收', '累計營業收入-去年累計營收', '累計營業收入-前期比較增減(%)', '備註']｜樣本 {"出表日期": "1150817", "資料年月": "11507", "公司代號": "1101", "公司名稱": "台泥", "產業別": "水泥工業", "營業收入-當月營收": "13744103", "營業收入-上月營收": "13382706", "營業收入-去年當月營收": "13535929", "營業收入-上月比較增減(%)": "2.70047776585692", "營業收入-去年同月增減(%)": "1.53
+## `esb_C_www_stat`
+`https://www.tpex.org.tw/www/zh-tw/emerging/statistics?date={roc}&response=json`
+- 近日：非 JSON：<!DOCTYPE html><html lang="zh-Hant-tw"><head><title>404 - è­å¸æ«æª¯，0 列
+- 過去：非 JSON：<!DOCTYPE html><html lang="zh-Hant-tw"><head><title>404 - è­å¸æ«æª¯，0 列
 
-## 3. 證交所每日盤後端點的表格結構
+## `esb_D_peQry`
+`https://www.tpex.org.tw/www/zh-tw/emerging/peQry?date={roc}&response=json`
+- 近日：非 JSON：<!DOCTYPE html><html lang="zh-Hant-tw"><head><title>404 - è­å¸æ«æª¯，0 列
+- 過去：非 JSON：<!DOCTYPE html><html lang="zh-Hant-tw"><head><title>404 - è­å¸æ«æª¯，0 列
 
-### `https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=20260828&type=ALLBUT0999&response=json`
-- 頂層 keys：['tables', 'type', 'params', 'stat', 'date']  stat=OK
-  - 表 0：56 列｜title=115年08月28日 價格指數(臺灣證券交易所)｜欄位 ['指數', '收盤指數', '漲跌(+/-)', '漲跌點數', '漲跌百分比(%)', '特殊處理註記']
-    - 樣本 ["寶島股價指數", "51,394.02", "<p style ='color:red'>+</p>", "389.55", "0.76", ""]
-  - 表 1：48 列｜title=價格指數(跨市場)｜欄位 ['指數', '收盤指數', '漲跌(+/-)', '漲跌點數', '漲跌百分比(%)', '特殊處理註記']
-    - 樣本 ["臺灣生技指數", "4,613.61", "<p style ='color:green'>-</p>", "40.87", "-0.88", ""]
-  - 表 2：37 列｜title=價格指數(臺灣指數公司)｜欄位 ['指數', '收盤指數', '漲跌(+/-)', '漲跌點數', '漲跌百分比(%)', '特殊處理註記']
-    - 樣本 ["金融類日報酬兩倍指數", "107,623.38", "<p style ='color:red'>+</p>", "3,335.61", "3.20", ""]
-  - 表 3：47 列｜title=報酬指數(臺灣證券交易所)｜欄位 ['報酬指數', '收盤指數', '漲跌(+/-)', '漲跌點數', '漲跌百分比(%)', '特殊處理註記']
-    - 樣本 ["寶島股價報酬指數", "79,830.76", "<p style ='color:red'>+</p>", "611.45", "0.77", ""]
-  - 表 4：49 列｜title=報酬指數(跨市場)｜欄位 ['報酬指數', '收盤指數', '漲跌(+/-)', '漲跌點數', '漲跌百分比(%)', '特殊處理註記']
-    - 樣本 ["臺灣生技報酬指數", "5,419.44", "<p style ='color:green'>-</p>", "48.00", "-0.88", ""]
-  - 表 5：36 列｜title=報酬指數(臺灣指數公司)｜欄位 ['報酬指數', '收盤指數', '漲跌(+/-)', '漲跌點數', '漲跌百分比(%)', '特殊處理註記']
-    - 樣本 ["漲升股利150報酬指數", "33,761.07", "<p style ='color:red'>+</p>", "355.73", "1.06", ""]
-  - 表 6：17 列｜title=115年08月28日 大盤統計資訊｜欄位 ['成交統計', '成交金額(元)', '成交股數(股)', '成交筆數']
-    - 樣本 ["1.一般股票", "1,006,613,934,315", "5,189,414,229", "4,155,179"]
-  - 表 7：5 列｜title=漲跌證券數合計｜欄位 ['類型', '整體市場', '股票']
-    - 樣本 ["上漲(漲停)", "7,456(227)", "361(19)"]
-  - 表 8：1377 列｜title=115年08月28日 每日收盤行情(全部(不含權證、牛熊證、可展延牛熊證))｜欄位 ['證券代號', '證券名稱', '成交股數', '成交筆數', '成交金額', '開盤價', '最高價', '最低價', '收盤價', '漲跌(+/-)', '漲跌價差', '最後揭示買價', '最後揭示買量', '最後揭示賣價', '最後揭示賣量', '本益比']
-    - 樣本 ["00400A", "主動國泰動能高息", "41,461,478", "7,417", "621,924,604", "14.96", "15.05", "14.91", "15.00", "<p style= color:red>+</p>", "0.19", "15.00", "80", "15.01", "176", "0.00"]
-  - 表 9：0 列｜title=None｜欄位 []
+## `esb_E_api`
+`https://www.tpex.org.tw/openapi/v1/tpex_esb_latest_statistics`
+- 近日：OK，364 列
+- 過去：OK，364 列
+- 判定：**忽略日期 ✗（兩次結果相同）**
+- 近日樣本：`[{"Date": "1150831", "Time": "163004", "SecuritiesCompanyCode": "1260", "CompanyName": "富味鄉", "PreviousAveragePrice": "30.25", "BuyingPrice": "29.4", "BuyingQuantity": "3000", "SellingPrice": "30.6", "SellingQuantity": "2998", "Highest": "30.6", "Lowest": "29.`
+- 過去樣本：`[{"Date": "1150831", "Time": "163004", "SecuritiesCompanyCode": "1260", "CompanyName": "富味鄉", "PreviousAveragePrice": "30.25", "BuyingPrice": "29.4", "BuyingQuantity": "3000", "SellingPrice": "30.6", "SellingQuantity": "2998", "Highest": "30.6", "Lowest": "29.`
 
-### `https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL?response=json`
-- 失敗：Expecting value: line 1 column 1 (char 0)
-### `https://www.twse.com.tw/rwd/zh/afterTrading/BWIBBU_d?date=20260828&selectType=ALL&response=json`
-- 頂層 keys：['stat', 'date', 'title', 'fields', 'data', 'selectType', 'total']  stat=OK
-  - 頂層 fields：['證券代號', '證券名稱', '收盤價', '殖利率(%)', '股利年度', '本益比', '股價淨值比', '財報年/季']
-    - 樣本 ["1101", "台泥", "24.30", "3.29", 114, "-", "0.79", "115/2"]
+## `listed_bwibbu`
+`https://www.twse.com.tw/rwd/zh/afterTrading/BWIBBU_d?date={ymd}&selectType=ALL&response=json`
+- 近日：OK，1081 列
+- 過去：OK，1082 列
+- 判定：**吃日期 ✓**
+- 近日樣本：`[["1101", "台泥", "24.30", "3.29", 114, "-", "0.79", "115/2"], ["1102", "亞泥", "34.55", "6.66", 114, "9.54", "0.66", "115/2"]]`
+- 過去樣本：`[["1101", "台泥", "23.80", "3.36", 114, "-", "0.76", "115/1"], ["1102", "亞泥", "32.70", "7.03", 114, "10.97", "0.65", "115/1"]]`
+
+## `listed_mi`
+`https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date={ymd}&type=ALLBUT0999&response=json`
+- 近日：OK，1377 列
+- 過去：OK，1377 列
+- 判定：**吃日期 ✓**
+- 近日樣本：`[["00400A", "主動國泰動能高息", "41,461,478", "7,417", "621,924,604", "14.96", "15.05", "14.91", "15.00", "<p style= color:red>+</p>", "0.19", "15.00", "80", "15.01", "176", "0.00"], ["00401A", "主動摩根台灣鑫收", "3,028,373", "698", "41,696,359", "13.74", "13.80", "13.71", "`
+- 過去樣本：`[["00400A", "主動國泰動能高息", "54,905,455", "7,524", "725,130,876", "12.93", "13.37", "12.93", "13.25", "<p style= color:red>+</p>", "0.31", "13.24", "152", "13.25", "981", "0.00"], ["00401A", "主動摩根台灣鑫收", "9,538,199", "852", "121,445,500", "12.55", "12.83", "12.47",`
