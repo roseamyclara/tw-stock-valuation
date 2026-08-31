@@ -57,6 +57,38 @@
     </div>
   </section>
 
+  <!-- ============ 漲幅排行與族群 ============ -->
+  <section id="moversSection">
+    <h2>漲幅排行與族群</h2>
+    <p class="note" id="moversNote">載入中…</p>
+
+    <div class="chart-head">
+      <div class="seg" id="periodSeg" role="group" aria-label="選擇期間">
+        <button type="button" data-period="d1" aria-pressed="true">1 天</button>
+        <button type="button" data-period="d5" aria-pressed="false">5 天</button>
+        <button type="button" data-period="d10" aria-pressed="false">10 天</button>
+        <button type="button" data-period="d30" aria-pressed="false">30 天</button>
+      </div>
+      <div class="seg" id="moverMarketSeg" role="group" aria-label="選擇市場">
+        <button type="button" data-mm="listed" aria-pressed="true">上市</button>
+        <button type="button" data-mm="otc" aria-pressed="false">上櫃</button>
+        <button type="button" data-mm="esb" aria-pressed="false">興櫃</button>
+      </div>
+    </div>
+
+    <div class="movers-grid">
+      <div class="card">
+        <h3 class="card-h">最近在漲什麼</h3>
+        <p class="note" id="groupNote">依業務標籤分組，取組內漲幅中位數排序。中位數要多數成員一起漲才會高，一檔飆股拉不動。</p>
+        <div id="groupBars"></div>
+      </div>
+      <div class="card">
+        <h3 class="card-h" id="rankTitle">漲幅排行</h3>
+        <ol class="rank" id="rankList"></ol>
+      </div>
+    </div>
+  </section>
+
   <!-- ============ 個股表 ============ -->
   <section>
     <h2>個股指標</h2>

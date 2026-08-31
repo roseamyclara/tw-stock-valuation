@@ -83,6 +83,16 @@ def main() -> None:
         else:
             log(f"{y} 年：無新增")
 
+    # 回補也順便補齊每日收盤價（漲幅排行要用），再重算一次排行
+    log("回補每日收盤價…")
+    import sys as _sys
+
+    import build_movers
+    import fetch_prices
+    _sys.argv.append("--backfill")
+    fetch_prices.main()
+    build_movers.main()
+
 
 if __name__ == "__main__":
     main()

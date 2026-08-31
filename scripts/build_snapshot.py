@@ -348,6 +348,16 @@ def main() -> int:
     for m in M.MARKETS:
         n = sum(1 for s in rows if s["m"] == m)
         log(f"  {M.MARKET_LABEL[m]}：{n} 檔")
+
+    # 每日快照的後兩段：收當天收盤價，再由收盤價算漲幅排行與族群。
+    # 順序不能顛倒 —— build_movers 需要上面剛寫好的 latest.json。
+    log("收集每日收盤價…")
+    import fetch_prices
+    fetch_prices.main()
+
+    log("計算漲幅排行與族群…")
+    import build_movers
+    build_movers.main()
     return 0
 
 

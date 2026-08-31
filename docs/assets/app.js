@@ -31,9 +31,9 @@
   const mopsUrl = (r) => `https://mopsov.twse.com.tw/mops/web/t05st03?TYPEK=${MOPS_TYPE[r.m] || "sii"}&co_id=${r.c}`;
 
   const state = {
-    rows: [], view: [], meta: null, market: null, hist: null, tags: {},
+    rows: [], view: [], meta: null, market: null, hist: null, tags: {}, movers: null,
     sortKey: "cap", sortDir: -1, filterMarket: "", industry: "", tag: "", q: "",
-    shown: 200, metric: "pe", range: 120,
+    shown: 200, metric: "pe", range: 120, period: "d1", moverMarket: "listed",
   };
 
   const tagsOf = (code) => state.tags[code] || [];
@@ -441,19 +441,77 @@
     );
   }
 
-  function draw() { renderTiles(); renderHist(); }
+  // ---------------------------------------------------------------- 漲幅排行
+  function renderMovers() {
+    const mv = state.movers;
+    const note = $("moversNote");
+    if (!mv || !mv.periods || !Object.keys(mv.periods).length) {
+      note.textContent = "漲幅資料尚未產生 —— 到 GitHub 的 Actions 頁執行一次「每日更新」即可。";
+      $("groupBars").innerHTML = "";
+      $("rankList").innerHTML = "";
+      return;
+    }
+    const keys = Object.keys(mv.periods);
+    if (!mv.periods[state.period]) state.period = keys[0];
+    const p = mv.periods[state.period];
+
+    note.innerHTML = `以 <strong>${p.from}</strong> 收盤為基準，比到 <strong>${mv.asOf}</strong>，`
+      + `共 ${p.days} 個交易日。`
+      + (p.counts.esb ? "" : "<strong>興櫃的中長天期漲幅要等資料累積</strong>——官方沒有整批的興櫃歷史每日行情端點，只能從本站開始逐日收集。");
+
+    // ---- 族群長條 ----
+    const gs = (p.groups || []).filter((g) => g.med != null).slice(0, 12);
+    const maxAbs = Math.max(...gs.map((g) => Math.abs(g.med)), 1);
+    $("groupBars").innerHTML = gs.length
+      ? gs.map((g) => {
+          const w = (Math.abs(g.med) / maxAbs) * 100;
+          const cls = g.med >= 0 ? "up" : "down";
+          return `<button type="button" class="grow" data-tag="${g.tag}">
+            <span class="gname">${g.tag}</span>
+            <span class="gbar"><span class="gfill ${cls}" style="width:${w.toFixed(1)}%"></span></span>
+            <span class="gval ${g.med >= 0 ? "pos" : "neg"}">${g.med > 0 ? "+" : ""}${fmt(g.med, 1)}%</span>
+            <span class="gn">${g.n} 檔</span>
+          </button>`;
+        }).join("")
+      : '<p class="note">這個期間還沒有足夠的族群資料。</p>';
+    $("groupBars").querySelectorAll(".grow").forEach((b) =>
+      b.addEventListener("click", () => {
+        state.tag = b.dataset.tag; state.industry = ""; $("industry").value = "";
+        state.shown = 200; applyFilters();
+        document.getElementById("tbl").scrollIntoView({ behavior: "smooth", block: "start" });
+      })
+    );
+
+    // ---- 個股排行 ----
+    const list = (p.markets && p.markets[state.moverMarket]) || [];
+    $("rankTitle").textContent = `${LABEL[state.moverMarket]}漲幅排行`;
+    $("rankList").innerHTML = list.length
+      ? list.slice(0, 25).map((s) => `<li data-c="${s.c}">
+          <span class="rc">${s.c}</span>
+          <span class="rn">${s.n}</span>
+          <span class="rt">${(s.t && s.t.length ? s.t : (s.i ? [s.i] : [])).map((t) => `<span class="tag static">${t}</span>`).join(" ")}</span>
+          <span class="rr ${s.r >= 0 ? "pos" : "neg"}">${s.r > 0 ? "+" : ""}${fmt(s.r, 1)}%</span>
+        </li>`).join("")
+      : `<li class="empty">${LABEL[state.moverMarket]}在這個期間還沒有資料。</li>`;
+    $("rankList").querySelectorAll("li[data-c]").forEach((li) =>
+      li.addEventListener("click", () => openStock(li.dataset.c))
+    );
+  }
+
+  function draw() { renderTiles(); renderHist(); renderMovers(); }
 
   // ---------------------------------------------------------------- 啟動
   (async function init() {
-    const [meta, market, hist, rows, tags] = await Promise.all([
+    const [meta, market, hist, rows, tags, movers] = await Promise.all([
       getJSON("data/meta.json", null),
       getJSON("data/market.json", null),
       getJSON("data/market_history.json", null),
       getJSON("data/latest.json", []),
       getJSON("data/tags.json", {}),
+      getJSON("data/movers.json", null),
     ]);
     state.meta = meta; state.market = market; state.hist = hist;
-    state.rows = rows || []; state.tags = tags || {};
+    state.rows = rows || []; state.tags = tags || {}; state.movers = movers;
 
     $("asof").textContent = meta && meta.asOf
       ? `資料日期 ${meta.asOf}・更新於 ${(meta.updatedAt || "").replace("T", " ").slice(0, 16)}`
@@ -480,5 +538,7 @@
     bindSeg("marketSeg", "market", "filterMarket", () => { state.shown = 200; applyFilters(); });
     bindSeg("metricSeg", "metric", "metric", renderHist);
     bindSeg("rangeSeg", "range", "range", renderHist, Number);
+    bindSeg("periodSeg", "period", "period", renderMovers);
+    bindSeg("moverMarketSeg", "mm", "moverMarket", renderMovers);
   })();
 })();
