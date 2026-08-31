@@ -1,117 +1,111 @@
-"""第二輪探測：找出「上市」資料在 GitHub Actions 上可用的替代路徑。
+"""第三輪探測：找「單日全市場收盤價」且真的吃日期參數的端點。
 
-已知：openapi.twse.com.tw 會擋機房 IP（回安全性攔截頁），
-      但 www.twse.com.tw 的盤後端點可用，TPEx 的 OpenAPI 也完全可用。
-這裡驗證三件事：
-  1. TPEx 的 OpenAPI 是否也代管了上市（_L）的公開資訊觀測站資料集
-  2. 證交所自家還有沒有其他可用主機／路徑
-  3. MI_INDEX 究竟回了哪幾張表，個股表在第幾張
+漲幅排行需要過去約 30 個交易日的每日收盤價。
+已知：上市的 BWIBBU_d 支援日期且含收盤價；
+      上櫃的 stk_quote_result.php 會忽略日期、一律回當天；
+      興櫃的 www/zh-tw/emerging/historical 需要個股代號，不能整批。
+這裡把候選端點各打「今天」與「20 個交易日前」兩次，比對回傳是否真的不同 ——
+只有兩次結果不同，才代表它真的吃日期。
 """
 from __future__ import annotations
 
 import json
+from datetime import date, timedelta
 
 import requests
-from util import session
+from util import session, to_roc
 
-TPEX = "https://www.tpex.org.tw/openapi/v1"
-TWSE_RWD = "https://www.twse.com.tw/rwd/zh"
+TPEX = "https://www.tpex.org.tw"
+TWSE = "https://www.twse.com.tw/rwd/zh"
 
-# 1. TPEx 是否代管上市資料集
-TPEX_L = [
-    f"{TPEX}/mopsfin_t187ap05_L",       # 上市月營收
-    f"{TPEX}/mopsfin_t187ap03_L",       # 上市公司基本資料（含股數）
-    f"{TPEX}/mopsfin_t187ap06_L_ci",    # 上市綜合損益表
-    f"{TPEX}/t187ap05_L",
-    f"{TPEX}/t187ap03_L",
-    f"{TPEX}/t187ap06_L_ci",
-    f"{TPEX}/mopsfin_t187ap06_R_ci",    # 興櫃損益表（第一輪失敗，再試一次）
-    f"{TPEX}/t187ap06_R_ci",
-    f"{TPEX}/t187ap03_R",
-]
-
-# 2. 證交所的其他主機／路徑
-TWSE_ALT = [
-    "https://mopsfin.twse.com.tw/opendata/t187ap05_L",
-    "https://mops.twse.com.tw/opendata/t187ap05_L",
-    f"{TWSE_RWD}/opendata/t187ap05_L",
-    "https://www.twse.com.tw/opendata/t187ap05_L",
-    "https://openapi.twse.com.tw/v1/opendata/t187ap05_L",   # 對照組
-]
-
-# 3. 上市每日收盤 / 股數
-TWSE_DAILY = [
-    f"{TWSE_RWD}/afterTrading/MI_INDEX?date=20260828&type=ALLBUT0999&response=json",
-    f"{TWSE_RWD}/afterTrading/STOCK_DAY_ALL?response=json",
-    f"{TWSE_RWD}/afterTrading/BWIBBU_d?date=20260828&selectType=ALL&response=json",
-]
-
-HEADER_SETS = {
-    "default": {},
-    "with-referer": {"Referer": "https://openapi.twse.com.tw/"},
-    "plain-ua": {"User-Agent": "python-requests/2.32"},
+CANDIDATES = {
+    # ---- 上櫃 ----
+    "otc_A_stk_wn1430": TPEX + "/web/stock/aftertrading/otc_quotes_no1430/stk_wn1430_result.php?l=zh-tw&d={roc}&se=EW",
+    "otc_B_stk_quote": TPEX + "/web/stock/aftertrading/daily_close_quotes/stk_quote_result.php?l=zh-tw&d={roc}",
+    "otc_C_www_otc": TPEX + "/www/zh-tw/afterTrading/otc?date={roc}&type=EW&response=json",
+    "otc_D_dailyQuotes": TPEX + "/www/zh-tw/afterTrading/dailyQuotes?date={roc}&type=EW&response=json",
+    "otc_E_otcQuote": TPEX + "/www/zh-tw/afterTrading/otcQuote?date={roc}&response=json",
+    "otc_F_api": TPEX + "/openapi/v1/tpex_mainboard_daily_close_quotes",   # 對照組，應該不吃日期
+    # ---- 興櫃 ----
+    "esb_A_emdaily": TPEX + "/web/emergingstock/aftertrading/daily_close_quotes/emdaily_result.php?l=zh-tw&d={roc}",
+    "esb_B_www_daily": TPEX + "/www/zh-tw/emerging/dailyQuotes?date={roc}&response=json",
+    "esb_C_www_stat": TPEX + "/www/zh-tw/emerging/statistics?date={roc}&response=json",
+    "esb_D_peQry": TPEX + "/www/zh-tw/emerging/peQry?date={roc}&response=json",
+    "esb_E_api": TPEX + "/openapi/v1/tpex_esb_latest_statistics",          # 對照組
+    # ---- 上市（已知可用，當基準）----
+    "listed_bwibbu": TWSE + "/afterTrading/BWIBBU_d?date={ymd}&selectType=ALL&response=json",
+    "listed_mi": TWSE + "/afterTrading/MI_INDEX?date={ymd}&type=ALLBUT0999&response=json",
 }
 
 
-def show(url: str, headers: dict | None = None) -> str:
+def business_days_back(n: int) -> date:
+    d = date.today() - timedelta(days=1)
+    cnt = 0
+    while cnt < n:
+        d -= timedelta(days=1)
+        if d.weekday() < 5:
+            cnt += 1
+    return d
+
+
+def fmt(url: str, d: date) -> str:
+    roc = to_roc(d)
+    return url.format(ymd=d.strftime("%Y%m%d"), roc=f"{roc[:3]}/{roc[3:5]}/{roc[5:]}")
+
+
+def grab(url: str) -> tuple[str, int, str]:
+    """回傳 (狀態說明, 資料列數, 前兩列的指紋)。"""
     try:
-        r = session().get(url, timeout=45, headers=headers or {})
+        r = session().get(url, timeout=45)
     except requests.RequestException as exc:
-        return f"ERR {str(exc)[:100]}"
-    body = r.text.strip()
+        return f"ERR {str(exc)[:70]}", 0, ""
     if r.status_code != 200:
-        return f"HTTP {r.status_code}"
-    if not body.startswith(("[", "{")):
-        return f"非 JSON（{len(body)} bytes）：{body[:90]}"
+        return f"HTTP {r.status_code}", 0, ""
+    body = r.text.strip()
+    if body[:1] not in ("[", "{"):
+        return f"非 JSON：{body[:70]}", 0, ""
     try:
-        data = json.loads(body)
+        data = r.json()
     except ValueError:
-        return "JSON 解析失敗"
+        return "JSON 解析失敗", 0, ""
+
+    rows = []
     if isinstance(data, list):
-        if not data:
-            return "空陣列"
-        keys = list(data[0].keys()) if isinstance(data[0], dict) else []
-        return f"{len(data)} 筆｜欄位 {keys[:14]}｜樣本 {json.dumps(data[0], ensure_ascii=False)[:220]}"
-    return f"dict｜keys {list(data.keys())[:12]}"
+        rows = data
+    elif isinstance(data, dict):
+        if isinstance(data.get("aaData"), list):
+            rows = data["aaData"]
+        elif isinstance(data.get("data"), list):
+            rows = data["data"]
+        else:
+            for t in data.get("tables", []) or []:
+                if isinstance(t.get("data"), list) and len(t["data"]) > len(rows):
+                    rows = t["data"]
+    if not rows:
+        keys = list(data.keys())[:8] if isinstance(data, dict) else []
+        return f"沒有資料列（keys={keys}）", 0, ""
+    return "OK", len(rows), json.dumps(rows[:2], ensure_ascii=False)[:260]
 
 
 def main() -> None:
-    out = ["# 第二輪探測：上市資料替代路徑", ""]
+    today_d = business_days_back(1)
+    past_d = business_days_back(20)
+    out = [f"# 第三輪探測：每日收盤價端點", "",
+           f"近日 = {today_d}，20 個交易日前 = {past_d}", "",
+           "判準：兩個日期回傳的指紋**必須不同**，才代表這支端點真的吃日期參數。", ""]
 
-    out += ["## 1. TPEx OpenAPI 是否代管上市／興櫃資料集", ""]
-    for u in TPEX_L:
-        out.append(f"- `{u}`\n  - {show(u)}")
-    out.append("")
-
-    out += ["## 2. 證交所其他主機／路徑（含標頭實驗）", ""]
-    for u in TWSE_ALT:
-        for name, h in HEADER_SETS.items():
-            out.append(f"- `{u}` [{name}]\n  - {show(u, h)}")
-    out.append("")
-
-    out += ["## 3. 證交所每日盤後端點的表格結構", ""]
-    for u in TWSE_DAILY:
-        out.append(f"### `{u}`")
-        try:
-            r = session().get(u, timeout=45)
-            data = r.json()
-        except Exception as exc:  # noqa: BLE001
-            out.append(f"- 失敗：{str(exc)[:120]}")
-            continue
-        if isinstance(data, list):
-            out.append(f"- 陣列 {len(data)} 筆，欄位 {list(data[0].keys()) if data and isinstance(data[0], dict) else []}")
-            continue
-        out.append(f"- 頂層 keys：{list(data.keys())[:12]}  stat={data.get('stat')}")
-        for i, t in enumerate(data.get("tables", []) or []):
-            fields = t.get("fields") or []
-            rows = t.get("data") or []
-            out.append(f"  - 表 {i}：{len(rows)} 列｜title={str(t.get('title'))[:40]}｜欄位 {fields[:16]}")
-            if rows:
-                out.append(f"    - 樣本 {json.dumps(rows[0], ensure_ascii=False)[:200]}")
-        if data.get("fields"):
-            out.append(f"  - 頂層 fields：{data['fields'][:16]}")
-            if data.get("data"):
-                out.append(f"    - 樣本 {json.dumps(data['data'][0], ensure_ascii=False)[:200]}")
+    for name, tpl in CANDIDATES.items():
+        out.append(f"## `{name}`")
+        out.append(f"`{tpl}`")
+        s1, n1, f1 = grab(fmt(tpl, today_d))
+        s2, n2, f2 = grab(fmt(tpl, past_d))
+        out.append(f"- 近日：{s1}，{n1} 列")
+        out.append(f"- 過去：{s2}，{n2} 列")
+        if n1 and n2:
+            verdict = "**吃日期 ✓**" if f1 != f2 else "**忽略日期 ✗（兩次結果相同）**"
+            out.append(f"- 判定：{verdict}")
+            out.append(f"- 近日樣本：`{f1}`")
+            out.append(f"- 過去樣本：`{f2}`")
         out.append("")
 
     report = "\n".join(out)
