@@ -281,6 +281,32 @@ def update_fundamentals(stocks: dict[str, dict]) -> None:
     write_json(path, store)
 
 
+def update_month_history(rows: list[dict], day) -> None:
+    """把當月的估值快照寫進 docs/data/history/<年>.json。
+
+    這件事非做不可：歷史月份原本只有「歷史回補」那支手動流程會寫，
+    每日更新只讀不寫，各年度走勢圖就會永遠停在最後一次回補的月份。
+    這裡每天用當日數值覆蓋「當月」那一筆，月底自然就停在該月最後一個交易日，
+    新的月份也會自己長出來，跟回補的結果一致。
+    """
+    path = DATA_DIR / "history" / f"{day.year}.json"
+    store = read_json(path, {}) or {}
+    key = month_key(day.year, day.month)
+
+    stocks = {}
+    for s in rows:
+        pe, pb, dy, p = s.get("pe"), s.get("pb"), s.get("dy"), s.get("p")
+        if pe is None and pb is None and dy is None:
+            continue
+        stocks[s["c"]] = [pe, pb, dy, p]
+    if not stocks:
+        return
+
+    store[key] = {"d": day.isoformat(), "s": stocks}
+    write_json(path, dict(sorted(store.items())))
+    log(f"當月歷史 {key}（{day}）：{len(stocks)} 檔")
+
+
 def market_aggregate(rows: list[dict]) -> dict:
     """三市場的估值水準：成分股的中位數。
 
@@ -348,6 +374,9 @@ def main() -> int:
     for m in M.MARKETS:
         n = sum(1 for s in rows if s["m"] == m)
         log(f"  {M.MARKET_LABEL[m]}：{n} 檔")
+
+    if day:
+        update_month_history(rows, day)
 
     # 每日快照的後兩段：收當天收盤價，再由收盤價算漲幅排行與族群。
     # 順序不能顛倒 —— build_movers 需要上面剛寫好的 latest.json。
