@@ -135,7 +135,12 @@
 /* ============================================================ base */
 *, *::before, *::after { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; }
+html {
+  scroll-behavior: smooth;
+  /* 關掉 Android Chrome 的自動放大字級：它會把 em 欄寬撐開，把名稱欄擠成一個字 */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after {
@@ -342,6 +347,7 @@ button, input, select, textarea { font: inherit; }
 
 /* 次要說明收合起來，手機上不再是一大片文字牆 */
 .disclosure { margin-top: 10px; }
+#stocks .disclosure { margin: 0 0 14px; }
 .disclosure > summary {
   display: inline-flex;
   align-items: center;
@@ -572,7 +578,8 @@ svg.chart circle.pt { stroke: var(--surface-1); stroke-width: 2.5; }
 .rank li {
   counter-increment: r;
   display: grid;
-  grid-template-columns: 1.9em 3.6em 5.6em 1fr 4.6em;
+  /* minmax(0,1fr) 讓中間欄可以縮，名稱不會被兩側固定欄擠掉 */
+  grid-template-columns: 1.9em minmax(0, 1fr) auto;
   align-items: center;
   gap: 9px;
   padding: 8px 6px;
@@ -591,10 +598,22 @@ svg.chart circle.pt { stroke: var(--surface-1); stroke-width: 2.5; }
   text-align: right;
 }
 .rank li:nth-child(-n+3)::before { color: var(--accent); font-weight: 700; }
-.rank .rc { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.rank .rinfo { min-width: 0; display: flex; align-items: center; gap: 10px; }
+.rank .rhead { display: flex; align-items: baseline; gap: 8px; min-width: 0; flex: 0 1 auto; }
+.rank .rc { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
 .rank .rn { font-size: 13.5px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rank .rt { overflow: hidden; white-space: nowrap; }
-.rank .rr { text-align: right; font-weight: 680; font-variant-numeric: tabular-nums; font-size: 13.5px; }
+.rank .rt {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  gap: 5px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.rank .rr {
+  text-align: right; font-weight: 680; font-variant-numeric: tabular-nums;
+  font-size: 13.5px; white-space: nowrap; min-width: 4.6ch;
+}
 .rank li.empty { display: block; color: var(--muted); font-size: 13px; cursor: default; }
 .rank li.empty:hover { background: none; }
 .rank li.empty::before { content: ""; }
@@ -634,19 +653,48 @@ svg.chart circle.pt { stroke: var(--surface-1); stroke-width: 2.5; }
 }
 
 /* ============================================================ 篩選列 */
-.filters {
+/* 個股指標的標題＋篩選列釘在頂欄下方，捲動個股清單時一直看得到 */
+.stock-bar {
   position: sticky;
   top: var(--topbar-h);
-  z-index: 20;
+  z-index: 25;
+  margin: 0 -20px 16px;
+  padding: 12px 20px 12px;
+  background: color-mix(in srgb, var(--page) 96%, transparent);
+  backdrop-filter: saturate(180%) blur(16px);
+  -webkit-backdrop-filter: saturate(180%) blur(16px);
+  border-bottom: 1px solid var(--border);
+}
+.stock-bar-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.stock-bar-head h2 {
+  margin: 0;
+  font-size: clamp(19px, 2.6vw, 24px);
+  font-weight: 660;
+  letter-spacing: -0.025em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+.stock-bar-head h2::before {
+  content: "";
+  width: 3px;
+  height: 1em;
+  border-radius: 2px;
+  background: linear-gradient(var(--accent), var(--accent-2));
+  flex: none;
+}
+
+.filters {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
-  margin-bottom: 14px;
-  padding: 10px 0;
-  background: color-mix(in srgb, var(--page) 88%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
 }
 .search {
   position: relative;
@@ -712,7 +760,11 @@ svg.chart circle.pt { stroke: var(--surface-1); stroke-width: 2.5; }
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
 }
+.count .clear-filter { overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: 12em; }
 .clear-filter {
   display: inline-flex;
   align-items: center;
@@ -742,7 +794,8 @@ svg.chart circle.pt { stroke: var(--surface-1); stroke-width: 2.5; }
 table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13.5px; }
 thead th {
   position: sticky;
-  top: 0;
+  /* --stickbar-h 由 app.js 依實際高度設定，表頭才不會躲到釘住的篩選列後面 */
+  top: calc(var(--topbar-h) + var(--stickbar-h, 0px));
   z-index: 2;
   background: var(--surface-1);
   text-align: right;
@@ -985,6 +1038,12 @@ footer a:hover { color: var(--accent); border-bottom-color: var(--accent); }
   .tile .fig .v { font-size: 30px; }
 }
 
+/* 表格在 1220px 以上塞得下，不需要水平捲動容器；
+   換成 clip 才不會建立捲動容器，表頭的 sticky 就能相對視窗生效 */
+@media (min-width: 1220px) {
+  .table-scroll { overflow-x: clip; }
+}
+
 /* ---- 平板以下：13 欄的表格改成卡片列表，個股面板改成底部抽屜 ---- */
 @media (max-width: 860px) {
   .table-scroll { display: none; }
@@ -993,7 +1052,6 @@ footer a:hover { color: var(--accent); border-bottom-color: var(--accent); }
 
   .filters { gap: 8px; }
   .search { flex: 1 1 100%; max-width: none; }
-  .count { margin-left: 0; width: 100%; order: 9; }
   .filters .select { flex: 1 1 auto; min-width: 0; }
   .filters .select select { width: 100%; max-width: none; }
 
@@ -1042,12 +1100,19 @@ footer a:hover { color: var(--accent); border-bottom-color: var(--accent); }
   .seg { width: 100%; }
   .seg button { padding: 9px 8px; font-size: 13px; }
 
-  .grow { grid-template-columns: 6.4em 1fr 4.1em; gap: 8px; padding: 8px 6px; }
+  .grow { grid-template-columns: minmax(0, 7.4em) minmax(0, 1fr) auto; gap: 8px; padding: 8px 6px; }
   .grow .gn { display: none; }
-  .rank li { grid-template-columns: 1.6em 3.4em 1fr 4.4em; gap: 8px; }
-  .rank .rt { display: none; }
+  .grow .gval { min-width: 5ch; }
 
-  .filters { margin: 0 -14px 12px; padding: 10px 14px; }
+  /* 排行改成兩行：上行代號＋名稱，下行業務標籤，兩者都留在畫面上 */
+  .rank li { grid-template-columns: 1.7em minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+  .rank .rinfo { display: block; }
+  .rank .rn { font-size: 14.5px; }
+  .rank .rt { margin-top: 3px; }
+  .rank .rt .tag { font-size: 11px; }
+
+  .stock-bar { margin: 0 -14px 14px; padding: 10px 14px; }
+  .stock-bar-head { margin-bottom: 8px; }
 
   .panel { padding-left: 16px; padding-right: 16px; }
   .panel-head { margin: 0 -16px 4px; padding: 6px 16px 12px; }
