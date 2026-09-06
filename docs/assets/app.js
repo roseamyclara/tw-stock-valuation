@@ -117,6 +117,16 @@
   onScroll();
   toTop.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
 
+  // 釘住的篩選列高度會隨換行改變，量出來給表頭的 sticky top 用
+  const stockBar = document.querySelector(".stock-bar");
+  if (stockBar) {
+    const measure = () =>
+      document.documentElement.style.setProperty("--stickbar-h", stockBar.offsetHeight + "px");
+    measure();
+    if (window.ResizeObserver) new ResizeObserver(measure).observe(stockBar);
+    else window.addEventListener("resize", measure);
+  }
+
   // ---------------------------------------------------------------- 折線圖
   /**
    * series: [{key, name, color, points: [[label, value], ...]}]
@@ -658,12 +668,16 @@
     const list = (p.markets && p.markets[state.moverMarket]) || [];
     $("rankTitle").textContent = `${LABEL[state.moverMarket]}漲幅排行`;
     $("rankList").innerHTML = list.length
-      ? list.slice(0, 25).map((s) => `<li data-c="${s.c}">
-          <span class="rc">${s.c}</span>
-          <span class="rn">${esc(s.n)}</span>
-          <span class="rt">${(s.t && s.t.length ? s.t : (s.i ? [s.i] : [])).map((t) => `<span class="tag static">${esc(t)}</span>`).join(" ")}</span>
-          <span class="rr ${s.r >= 0 ? "pos" : "neg"}">${s.r > 0 ? "+" : ""}${fmt(s.r, 1)}%</span>
-        </li>`).join("")
+      ? list.slice(0, 25).map((s) => {
+          const ts = (s.t && s.t.length ? s.t : (s.i ? [s.i] : []));
+          return `<li data-c="${s.c}">
+            <div class="rinfo">
+              <div class="rhead"><span class="rc">${s.c}</span><span class="rn">${esc(s.n)}</span></div>
+              ${ts.length ? `<div class="rt">${ts.map((t) => `<span class="tag static">${esc(t)}</span>`).join("")}</div>` : ""}
+            </div>
+            <span class="rr ${s.r >= 0 ? "pos" : "neg"}">${s.r > 0 ? "+" : ""}${fmt(s.r, 1)}%</span>
+          </li>`;
+        }).join("")
       : `<li class="empty">${LABEL[state.moverMarket]}在這個期間還沒有資料。</li>`;
     $("rankList").querySelectorAll("li[data-c]").forEach((li) =>
       li.addEventListener("click", () => openStock(li.dataset.c))
