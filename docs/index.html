@@ -2,49 +2,73 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f4f4f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#08080c" media="(prefers-color-scheme: dark)">
 <title>台股估值追蹤 — 上市／上櫃／興櫃 P/E、P/S 與成長率</title>
 <meta name="description" content="台灣股市上市、上櫃、興櫃三個板塊的本益比、股價營收比、月營收年增率與獲利成長率，資料取自證交所與櫃買中心官方開放資料，每交易日自動更新。">
 <link rel="stylesheet" href="assets/style.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>📈</text></svg>">
 </head>
 <body>
-<div class="wrap">
 
-  <header class="top">
-    <h1>台股估值追蹤</h1>
+<!-- ============ 頂欄 ============ -->
+<header class="topbar" id="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="#top">
+      <span class="brand-mark" aria-hidden="true">TW</span>
+      <span class="brand-txt">台股估值追蹤</span>
+    </a>
     <span class="asof" id="asof">載入中…</span>
-    <button class="theme-toggle" id="themeToggle" type="button">切換深淺色</button>
-  </header>
-  <p class="sub">
-    上市、上櫃、興櫃三個板塊的本益比與股價營收比，加上最新月份的營收年增率、累計年增率與獲利成長率。
-    資料全部取自證交所與櫃買中心的官方開放資料，每個交易日自動更新。
-  </p>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="切換深淺色"></button>
+  </div>
+</header>
+
+<div class="wrap" id="top">
+
+  <!-- ============ Hero ============ -->
+  <section class="hero">
+    <h1>看懂台股<br>現在貴不貴</h1>
+    <p class="lede">
+      上市、上櫃、興櫃三個板塊的本益比與股價營收比，加上最新月份的營收年增率、累計年增率與獲利成長率。
+      資料全部取自證交所與櫃買中心的官方開放資料，每個交易日自動更新。
+    </p>
+    <div class="hero-stats" id="heroStats"></div>
+  </section>
 
   <!-- ============ 市場總覽 ============ -->
-  <section>
-    <h2>市場估值水準</h2>
-    <p class="note">
-      各板塊成分股的中位數（市值加權值另列於卡片下方）。中位數不會被少數超大型股拉著走。
-      <strong>興櫃沒有本益比</strong>——官方未發布興櫃公司的損益表，沒有淨利就算不出本益比；
-      但興櫃有月營收，所以股價營收比仍然算得出來。
-    </p>
-    <div class="tiles" id="tiles"></div>
+  <section class="section" id="market">
+    <div class="section-head">
+      <h2>市場估值水準</h2>
+      <p class="note">
+        各板塊成分股的中位數（市值加權值另列於卡片下方）。中位數不會被少數超大型股拉著走。
+        <strong>興櫃沒有本益比</strong>——官方未發布興櫃公司的損益表，沒有淨利就算不出本益比；
+        但興櫃有月營收，所以股價營收比仍然算得出來。
+      </p>
+    </div>
+    <div class="tiles" id="tiles">
+      <div class="skeleton sk-tile"></div>
+      <div class="skeleton sk-tile"></div>
+      <div class="skeleton sk-tile"></div>
+    </div>
   </section>
 
   <!-- ============ 漲幅排行與族群 ============ -->
-  <section id="moversSection">
-    <h2>漲幅排行與族群</h2>
-    <p class="note" id="moversNote">載入中…</p>
+  <section class="section" id="moversSection">
+    <div class="section-head">
+      <h2>漲幅排行與族群</h2>
+      <p class="note" id="moversNote">載入中…</p>
+    </div>
 
-    <div class="chart-head">
-      <div class="seg" id="periodSeg" role="group" aria-label="選擇期間">
+    <div class="seg-scroll">
+      <div class="seg" id="periodSeg" role="group" aria-label="選擇期間" style="--n:4">
         <button type="button" data-period="d1" aria-pressed="true">1 天</button>
         <button type="button" data-period="d5" aria-pressed="false">5 天</button>
         <button type="button" data-period="d10" aria-pressed="false">10 天</button>
         <button type="button" data-period="d30" aria-pressed="false">30 天</button>
       </div>
-      <div class="seg" id="moverMarketSeg" role="group" aria-label="選擇市場">
+      <div class="seg" id="moverMarketSeg" role="group" aria-label="選擇市場" style="--n:3">
         <button type="button" data-mm="listed" aria-pressed="true">上市</button>
         <button type="button" data-mm="otc" aria-pressed="false">上櫃</button>
         <button type="button" data-mm="esb" aria-pressed="false">興櫃</button>
@@ -54,7 +78,7 @@
     <div class="movers-grid">
       <div class="card">
         <h3 class="card-h">最近在漲什麼</h3>
-        <p class="note" id="groupNote">依業務標籤分組，取組內漲幅中位數排序。中位數要多數成員一起漲才會高，一檔飆股拉不動。</p>
+        <p class="note">依業務標籤分組，取組內漲幅中位數排序。中位數要多數成員一起漲才會高，一檔飆股拉不動。</p>
         <div id="groupBars"></div>
       </div>
       <div class="card">
@@ -65,35 +89,55 @@
   </section>
 
   <!-- ============ 個股表 ============ -->
-  <section>
-    <h2>個股指標</h2>
-    <p class="note">
-      搜尋框除了代號與名稱，也比對業務標籤 —— 打「外籍移工」會找到統振。點標籤可篩選同類公司，
-      點任一列可看該股的歷史估值與營收明細。P/S 為自行計算（市值 ÷ 近十二個月營收），
-      標示「估」表示去年全年營收尚在累積、以去年同期的季節比例推估。
-    </p>
-    <p class="note">
-      <strong>關於業務標籤的來源</strong>：實線標籤（如「晶圓代工」「外籍移工」）是<strong>人工整理</strong>的，
-      不是官方資料，僅供快速辨識，可能有錯或過時，請以公司公告為準；目前涵蓋 2,342 檔中的
-      <span id="tagCoverage">—</span> 檔。虛線外框的標籤則是官方開放資料的產業別，用於尚未整理到的公司。
-    </p>
+  <section class="section" id="stocks">
+    <div class="section-head">
+      <h2>個股指標</h2>
+      <p class="note">
+        搜尋框除了代號與名稱，也比對業務標籤 —— 打「外籍移工」會找到統振。點標籤可篩選同類公司，
+        點任一列可看該股的歷史估值與營收明細。P/S 為自行計算（市值 ÷ 近十二個月營收），
+        標示「估」表示去年全年營收尚在累積、以去年同期的季節比例推估。
+      </p>
+      <details class="disclosure">
+        <summary>關於業務標籤的來源</summary>
+        <p class="note">
+          實線標籤（如「晶圓代工」「外籍移工」）是<strong>人工整理</strong>的，
+          不是官方資料，僅供快速辨識，可能有錯或過時，請以公司公告為準；目前涵蓋 2,342 檔中的
+          <span id="tagCoverage">—</span> 檔。虛線外框的標籤則是官方開放資料的產業別，用於尚未整理到的公司。
+        </p>
+      </details>
+    </div>
+
     <div class="filters">
-      <input type="search" id="q" placeholder="搜尋代號或名稱" aria-label="搜尋代號或名稱">
-      <div class="seg" id="marketSeg" role="group" aria-label="選擇市場">
+      <div class="search">
+        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.8"/><path d="m13.5 13.5 3.5 3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <input type="search" id="q" placeholder="搜尋代號、名稱或業務標籤" aria-label="搜尋代號、名稱或業務標籤">
+      </div>
+      <div class="seg" id="marketSeg" role="group" aria-label="選擇市場" style="--n:4">
         <button type="button" data-market="" aria-pressed="true">全部</button>
         <button type="button" data-market="listed" aria-pressed="false">上市</button>
         <button type="button" data-market="otc" aria-pressed="false">上櫃</button>
         <button type="button" data-market="esb" aria-pressed="false">興櫃</button>
       </div>
-      <select id="industry" aria-label="選擇產業"><option value="">所有產業</option></select>
+      <div class="select">
+        <select id="industry" aria-label="選擇產業"><option value="">所有產業</option></select>
+      </div>
+      <div class="select sort-mobile">
+        <select id="sortMobile" aria-label="排序依據"></select>
+      </div>
       <span class="count" id="count"></span>
     </div>
+
+    <!-- 桌機：完整表格 -->
     <div class="table-scroll">
       <table id="tbl">
         <thead><tr id="thead"></tr></thead>
         <tbody id="tbody"></tbody>
       </table>
     </div>
+
+    <!-- 手機：卡片列表 -->
+    <div class="stock-cards" id="cards"></div>
+
     <button class="more" id="more" type="button" hidden>顯示更多</button>
   </section>
 
@@ -107,6 +151,10 @@
     <p id="coverage"></p>
   </footer>
 </div>
+
+<button class="to-top" id="toTop" type="button" aria-label="回到頁首">
+  <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 16V5m0 0L5 10m5-5 5 5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+</button>
 
 <script src="assets/app.js"></script>
 </body>
