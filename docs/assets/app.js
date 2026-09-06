@@ -7,6 +7,9 @@
   const LABEL = { listed: "上市", otc: "上櫃", esb: "興櫃" };
   const SERIES = { listed: "var(--series-1)", otc: "var(--series-2)", esb: "var(--series-3)" };
 
+  // 平板以下改用卡片列表；桌機用完整表格。斷點與 style.css 的 860px 一致。
+  const MOBILE = window.matchMedia("(max-width: 860px)");
+
   // 公開資訊觀測站的市場代碼
   const MOPS_TYPE = { listed: "sii", otc: "otc", esb: "rotc" };
 
@@ -29,7 +32,7 @@
   const mopsUrl = (r) => `https://mopsov.twse.com.tw/mops/web/t05st03?TYPEK=${MOPS_TYPE[r.m] || "sii"}&co_id=${r.c}`;
 
   const state = {
-    rows: [], view: [], meta: null, market: null, tags: {}, movers: null,
+    rows: [], view: [], meta: null, market: null, tags: {}, movers: null, history: null,
     sortKey: "cap", sortDir: -1, filterMarket: "", industry: "", tag: "", q: "",
     shown: 200, period: "d1", moverMarket: "listed",
   };
@@ -48,6 +51,10 @@
     if (a >= 1e4) return (n / 1e4).toFixed(0) + " 萬";
     return String(Math.round(n));
   };
+
+  const esc = (s) =>
+    String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   const cell = (v, d = 2, signed = false) => {
     const s = fmt(v, d);
@@ -68,25 +75,47 @@
   }
 
   // ---------------------------------------------------------------- 主題
+  const SUN = '<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="3.6" stroke="currentColor" stroke-width="1.7"/><path d="M10 1.6v2M10 16.4v2M18.4 10h-2M3.6 10h-2M15.9 4.1l-1.4 1.4M5.5 14.5l-1.4 1.4M15.9 15.9l-1.4-1.4M5.5 5.5 4.1 4.1" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
+  const MOON = '<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M17 12.2A7.4 7.4 0 0 1 7.8 3a7.4 7.4 0 1 0 9.2 9.2Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>';
+
   const themeBtn = $("themeToggle");
+  const isDarkNow = () => {
+    const cur = document.documentElement.getAttribute("data-theme");
+    return cur === "dark" || (!cur && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  };
+  const paintToggle = () => {
+    const dark = isDarkNow();
+    themeBtn.innerHTML = dark ? SUN : MOON;
+    themeBtn.setAttribute("aria-label", dark ? "切換為淺色" : "切換為深色");
+  };
   const applyTheme = (t) => {
     if (t) document.documentElement.setAttribute("data-theme", t);
     else document.documentElement.removeAttribute("data-theme");
+    paintToggle();
   };
   try {
     const saved = localStorage.getItem("theme");
     if (saved) applyTheme(saved);
   } catch (_) {}
+  paintToggle();
   themeBtn.addEventListener("click", () => {
-    const cur = document.documentElement.getAttribute("data-theme");
-    const isDark =
-      cur === "dark" ||
-      (!cur && window.matchMedia("(prefers-color-scheme: dark)").matches);
-    const next = isDark ? "light" : "dark";
+    const next = isDarkNow() ? "light" : "dark";
     applyTheme(next);
     try { localStorage.setItem("theme", next); } catch (_) {}
     draw();
   });
+
+  // ---------------------------------------------------------------- 頂欄與回頂端
+  const topbar = $("topbar");
+  const toTop = $("toTop");
+  const onScroll = () => {
+    const y = window.scrollY;
+    topbar.classList.toggle("is-stuck", y > 8);
+    toTop.classList.toggle("show", y > 900);
+  };
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+  toTop.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
 
   // ---------------------------------------------------------------- 折線圖
   /**
@@ -198,6 +227,51 @@
     svg.addEventListener("touchend", hide);
   }
 
+  // ---------------------------------------------------------------- 迷你走勢線
+  /** 近三年的月本益比，畫成卡片下方的小走勢線。沒有歷史（興櫃）就不畫。 */
+  function sparkline(marketKey) {
+    const monthly = state.history && state.history.monthly;
+    if (!monthly) return "";
+    const keys = Object.keys(monthly).sort().slice(-36);
+    const pts = keys
+      .map((k) => {
+        const m = monthly[k] && monthly[k].m && monthly[k].m[marketKey];
+        return m && m.pe != null ? [k, m.pe] : null;
+      })
+      .filter(Boolean);
+    if (pts.length < 6) {
+      return '<div class="spark spark-empty"><div class="spark-lbl">官方未發布這個板塊的歷史本益比，無走勢可畫。</div></div>';
+    }
+
+    const W = 260, H = 40;
+    const vals = pts.map((p) => p[1]);
+    let lo = Math.min(...vals), hi = Math.max(...vals);
+    if (hi === lo) { hi += 1; lo -= 1; }
+    const pad = (hi - lo) * 0.16;
+    lo -= pad; hi += pad;
+    const X = (i) => (i * W) / (pts.length - 1);
+    const Y = (v) => H - ((v - lo) / (hi - lo)) * H;
+
+    const d = pts.map((p, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(" ");
+    const area = `${d} L${W},${H} L0,${H} Z`;
+    const gid = `sg-${marketKey}`;
+    const first = pts[0][1], last = pts[pts.length - 1][1];
+    const diff = last - first;
+    const since = pts[0][0];
+
+    return `<div class="spark">
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${LABEL[marketKey]}近三年本益比走勢">
+        <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${SERIES[marketKey]}" stop-opacity="0.26"/>
+          <stop offset="100%" stop-color="${SERIES[marketKey]}" stop-opacity="0"/>
+        </linearGradient></defs>
+        <path d="${area}" fill="url(#${gid})" stroke="none"/>
+        <path d="${d}" stroke="${SERIES[marketKey]}" vector-effect="non-scaling-stroke"/>
+      </svg>
+      <div class="spark-lbl">本益比走勢 ${since} 起　<span class="${diff >= 0 ? "pos" : "neg"}">${diff >= 0 ? "+" : ""}${diff.toFixed(1)}</span></div>
+    </div>`;
+  }
+
   // ---------------------------------------------------------------- 總覽卡
   function renderTiles() {
     const m = state.market && state.market.markets;
@@ -209,31 +283,51 @@
         d.peWeighted ? `本益比 ${fmt(d.peWeighted)}` : null,
         d.psWeighted ? `股價營收比 ${fmt(d.psWeighted)}` : null,
       ].filter(Boolean).join("、");
-      return `<div class="tile">
+      const pe = fmt(d.pe), ps = fmt(d.ps);
+      return `<article class="tile" style="--tile-color:${SERIES[k]}">
         <div class="name"><span class="swatch" style="background:${SERIES[k]}"></span>${LABEL[k]}</div>
         <div class="figs">
-          <div class="fig"><div class="v">${fmt(d.pe) ?? "—"}</div><div class="k">本益比中位數</div></div>
-          <div class="fig"><div class="v">${fmt(d.ps) ?? "—"}</div><div class="k">股價營收比中位數</div></div>
+          <div class="fig"><div class="v">${pe ?? '<span class="dash">—</span>'}</div><div class="k">本益比中位數</div></div>
+          <div class="fig"><div class="v">${ps ?? '<span class="dash">—</span>'}</div><div class="k">股價營收比中位數</div></div>
         </div>
         <div class="cnt">${n} 檔${d.cap ? "・總市值 " + human(d.cap) : ""}</div>
         ${weighted ? `<div class="cnt">市值加權：${weighted}</div>` : ""}
-      </div>`;
+        ${sparkline(k)}
+      </article>`;
     }).join("");
   }
 
-  // ---------------------------------------------------------------- 表格
+  function renderHeroStats() {
+    const meta = state.meta;
+    if (!meta) return;
+    const cap = state.market && state.market.markets
+      ? MARKETS.reduce((s, k) => s + ((state.market.markets[k] || {}).cap || 0), 0)
+      : null;
+    const items = [
+      ["追蹤檔數", meta.total],
+      ["有本益比", meta.withPE],
+      ["有月營收", meta.withRevenue],
+      ["有財報", meta.withFinancials],
+    ];
+    if (cap) items.unshift(["三板塊總市值", human(cap)]);
+    $("heroStats").innerHTML = items
+      .map(([k, v]) => `<span class="pill-stat">${k} <b>${v}</b></span>`)
+      .join("");
+  }
+
+  // ---------------------------------------------------------------- 表格欄位
   const COLS = [
     { k: "c", t: "代號", cls: "code", get: (r) => r.c },
-    { k: "n", t: "名稱", get: (r) => `${r.n} <span class="mkt">${LABEL[r.m]}</span>` },
+    { k: "n", t: "名稱", cls: "name-cell", get: (r) => `${esc(r.n)} <span class="mkt">${LABEL[r.m]}</span>` },
     {
       k: "i", t: "業務標籤", cls: "ind",
       // 有業務標籤就顯示業務標籤；沒有的話退回官方產業別（樣式做區隔，一眼看得出來源不同）
       get: (r) => {
         const ts = tagsOf(r.c);
         if (ts.length) {
-          return ts.map((t) => `<button type="button" class="tag" data-tag="${t}">${t}</button>`).join(" ");
+          return ts.map((t) => `<button type="button" class="tag${state.tag === t ? " is-active" : ""}" data-tag="${esc(t)}">${esc(t)}</button>`).join(" ");
         }
-        return r.i ? `<button type="button" class="tag ind-tag" data-ind="${r.i}">${r.i}</button>` : '<span class="na">—</span>';
+        return r.i ? `<button type="button" class="tag ind-tag${state.industry === r.i ? " is-active" : ""}" data-ind="${esc(r.i)}">${esc(r.i)}</button>` : '<span class="na">—</span>';
       },
     },
     { k: "p", t: "股價", get: (r) => cell(r.p) },
@@ -248,6 +342,9 @@
     { k: "eps", t: "EPS", get: (r) => cell(r.fin && r.fin.eps), val: (r) => r.fin && r.fin.eps },
   ];
 
+  // 手機排序選單只放有意義的數值欄位
+  const SORTABLE = ["cap", "p", "pe", "ps", "pb", "dy", "rev_yoy", "rev_cum", "net_yoy", "eps"];
+
   const valueOf = (r, k) => {
     const col = COLS.find((c) => c.k === k);
     const v = col && col.val ? col.val(r) : r[k];
@@ -259,14 +356,41 @@
       (c) => `<th data-k="${c.k}" aria-sort="${state.sortKey === c.k ? (state.sortDir > 0 ? "ascending" : "descending") : "none"}">${c.t}</th>`
     ).join("");
     $("thead").querySelectorAll("th").forEach((th) =>
-      th.addEventListener("click", () => {
-        const k = th.dataset.k;
-        if (state.sortKey === k) state.sortDir *= -1;
-        else { state.sortKey = k; state.sortDir = -1; }
-        state.shown = 200;
-        applyFilters();
-      })
+      th.addEventListener("click", () => sortBy(th.dataset.k))
     );
+
+    const sel = $("sortMobile");
+    sel.innerHTML = SORTABLE.map((k) => {
+      const c = COLS.find((x) => x.k === k);
+      return `<option value="${k}">${c.t}　由大到小</option><option value="${k}:asc">${c.t}　由小到大</option>`;
+    }).join("");
+    sel.value = state.sortKey;
+    sel.addEventListener("change", (e) => {
+      const [k, dir] = e.target.value.split(":");
+      state.sortKey = k;
+      state.sortDir = dir === "asc" ? 1 : -1;
+      state.shown = 200;
+      applyFilters();
+      syncSortUI();
+    });
+  }
+
+  function sortBy(k) {
+    if (state.sortKey === k) state.sortDir *= -1;
+    else { state.sortKey = k; state.sortDir = -1; }
+    state.shown = 200;
+    applyFilters();
+    syncSortUI();
+  }
+
+  function syncSortUI() {
+    $("thead").querySelectorAll("th").forEach((th) =>
+      th.setAttribute("aria-sort",
+        state.sortKey === th.dataset.k ? (state.sortDir > 0 ? "ascending" : "descending") : "none")
+    );
+    const sel = $("sortMobile");
+    const want = state.sortDir > 0 ? `${state.sortKey}:asc` : state.sortKey;
+    if (SORTABLE.includes(state.sortKey)) sel.value = want;
   }
 
   function applyFilters() {
@@ -294,45 +418,94 @@
     renderBody();
   }
 
+  /** 手機用：一檔一張卡，重點指標直接攤開，不必左右拖 */
+  function stockCard(r) {
+    const ts = tagsOf(r.c);
+    const tags = ts.length
+      ? ts.slice(0, 4).map((t) => `<button type="button" class="tag${state.tag === t ? " is-active" : ""}" data-tag="${esc(t)}">${esc(t)}</button>`).join("")
+      : (r.i ? `<button type="button" class="tag ind-tag${state.industry === r.i ? " is-active" : ""}" data-ind="${esc(r.i)}">${esc(r.i)}</button>` : "");
+    const metrics = [
+      ["本益比", cell(r.pe)],
+      ["股價營收比", r.ps == null ? '<span class="na">—</span>' : cell(r.ps) + (r.ps_basis === "估算" ? '<span class="est">估</span>' : "")],
+      ["淨值比", cell(r.pb)],
+      ["殖利率%", cell(r.dy)],
+      ["月營收年增%", cell(r.rev && r.rev.yoy, 1, true)],
+      ["累計年增%", cell(r.rev && r.rev.cum_yoy, 1, true)],
+      ["淨利年增%", cell(r.fin && r.fin.net_yoy, 1, true)],
+      ["EPS", cell(r.fin && r.fin.eps)],
+    ];
+    return `<div class="scard" data-c="${r.c}" role="button" tabindex="0">
+      <div class="scard-top">
+        <div class="scard-id">
+          <div class="scard-name"><span class="nm">${esc(r.n)}</span><span class="mkt">${LABEL[r.m]}</span></div>
+          <div class="scard-code">${r.c}</div>
+        </div>
+        <div class="scard-price">
+          <div class="p">${fmt(r.p) ?? "—"}</div>
+          <div class="cap">市值 ${human(r.cap) ?? "—"}</div>
+        </div>
+      </div>
+      ${tags ? `<div class="scard-tags">${tags}</div>` : ""}
+      <div class="scard-metrics">
+        ${metrics.map(([k, v]) => `<div class="m"><div class="mk">${k}</div><div class="mv">${v}</div></div>`).join("")}
+      </div>
+    </div>`;
+  }
+
   function renderBody() {
     const slice = state.view.slice(0, state.shown);
+
     $("tbody").innerHTML = slice
       .map((r) => `<tr data-c="${r.c}">${COLS.map((c) => `<td class="${c.cls || ""}">${c.get(r) ?? '<span class="na">—</span>'}</td>`).join("")}</tr>`)
       .join("");
+    $("cards").innerHTML = slice.map(stockCard).join("");
+
     const active = state.tag || state.industry;
     $("count").innerHTML = active
-      ? `<button type="button" class="clear-filter" id="clearFilter">${active} ✕</button> ${state.view.length} 檔`
+      ? `<button type="button" class="clear-filter" id="clearFilter">${esc(active)} ✕</button> ${state.view.length} 檔`
       : `${state.view.length} 檔`;
     const cf = $("clearFilter");
     if (cf) cf.addEventListener("click", () => {
       state.tag = ""; state.industry = ""; $("industry").value = "";
       state.shown = 200; applyFilters();
     });
+
     $("more").hidden = state.view.length <= state.shown;
-    $("tbody").querySelectorAll("tr").forEach((tr) =>
-      tr.addEventListener("click", (e) => {
-        // 點標籤是篩選，不是打開個股。再點一次同一個就取消。
-        const tag = e.target.closest(".tag");
-        if (tag) {
-          e.stopPropagation();
-          if (tag.dataset.tag !== undefined) {
-            state.tag = state.tag === tag.dataset.tag ? "" : tag.dataset.tag;
-            state.industry = "";
-          } else {
-            state.industry = state.industry === tag.dataset.ind ? "" : tag.dataset.ind;
-            state.tag = "";
-          }
-          $("industry").value = state.industry;
-          state.shown = 200;
-          applyFilters();
-          return;
+
+    // 點標籤是篩選，不是打開個股。再點一次同一個就取消。
+    const onPick = (el, code) => (e) => {
+      const tag = e.target.closest(".tag");
+      if (tag) {
+        e.stopPropagation();
+        if (tag.dataset.tag !== undefined) {
+          state.tag = state.tag === tag.dataset.tag ? "" : tag.dataset.tag;
+          state.industry = "";
+        } else {
+          state.industry = state.industry === tag.dataset.ind ? "" : tag.dataset.ind;
+          state.tag = "";
         }
-        openStock(tr.dataset.c);
-      })
-    );
+        $("industry").value = state.industry;
+        state.shown = 200;
+        applyFilters();
+        return;
+      }
+      openStock(code);
+    };
+
+    $("tbody").querySelectorAll("tr").forEach((tr) =>
+      tr.addEventListener("click", onPick(tr, tr.dataset.c)));
+
+    $("cards").querySelectorAll(".scard").forEach((el) => {
+      el.addEventListener("click", onPick(el, el.dataset.c));
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openStock(el.dataset.c); }
+      });
+    });
   }
 
   // ---------------------------------------------------------------- 個股面板
+  const CLOSE_ICON = '<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m5.5 5.5 9 9m0-9-9 9" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>';
+
   async function openStock(code) {
     const base = state.rows.find((r) => r.c === code);
     if (!base) return;
@@ -342,15 +515,16 @@
 
     const ov = document.createElement("div");
     ov.className = "overlay";
-    ov.innerHTML = `<div class="panel" role="dialog" aria-label="${base.n} 詳細">
+    ov.innerHTML = `<div class="panel" role="dialog" aria-modal="true" aria-label="${esc(base.n)} 詳細">
+      <div class="panel-grip" aria-hidden="true"></div>
       <div class="panel-head">
-        <h3>${base.c} ${base.n}</h3>
+        <h3>${base.c} ${esc(base.n)}</h3>
         <span class="mkt">${LABEL[base.m]}</span>
-        <span class="asof">${base.i || ""}</span>
-        <button class="close" type="button">關閉</button>
+        <span class="ind-lbl">${esc(base.i || "")}</span>
+        <button class="close" type="button" aria-label="關閉">${CLOSE_ICON}</button>
       </div>
       ${tagsOf(base.c).length
-        ? `<div class="panel-tags">${tagsOf(base.c).map((t) => `<span class="tag static">${t}</span>`).join(" ")}</div>`
+        ? `<div class="panel-tags">${tagsOf(base.c).map((t) => `<span class="tag static">${esc(t)}</span>`).join("")}</div>`
         : ""}
       <div class="kv">
         <div><div class="k">股價</div><div class="v">${fmt(base.p) ?? "—"}</div></div>
@@ -359,10 +533,11 @@
         <div><div class="k">淨值比</div><div class="v">${fmt(base.pb) ?? "—"}</div></div>
         <div><div class="k">市值</div><div class="v">${human(base.cap) ?? "—"}</div></div>
       </div>
-      ${chainUrl(base.i) ? `<div class="links">
-        <a href="${chainUrl(base.i)}" target="_blank" rel="noopener">${base.i}產業鏈說明</a>
-      </div>` : ""}
-      <h2>營收</h2>
+      <div class="links">
+        <a href="${mopsUrl(base)}" target="_blank" rel="noopener">公開資訊觀測站</a>
+        ${chainUrl(base.i) ? `<a href="${chainUrl(base.i)}" target="_blank" rel="noopener">${esc(base.i)}產業鏈說明</a>` : ""}
+      </div>
+      <h4>營收</h4>
       <p class="note">最新月份 ${rev.ym || "—"}${
         base.i && base.i.includes("金融") ? "。金融保險業的營收認列基礎與一般產業不同，成長率的擺盪幅度天生就大。" : ""
       }</p>
@@ -372,7 +547,7 @@
         <div><div class="k">累計年增率</div><div class="v">${cell(rev.cum_yoy, 1, true)}</div></div>
         <div><div class="k">月增率</div><div class="v">${cell(rev.mom, 1, true)}</div></div>
       </div>
-      <h2>獲利</h2>
+      <h4>獲利</h4>
       <p class="note">${fin.y ? `${fin.y} 年第 ${fin.q} 季累計` : "尚無財報資料"}</p>
       <div class="kv">
         <div><div class="k">EPS</div><div class="v">${fmt(fin.eps) ?? "—"}</div></div>
@@ -382,40 +557,52 @@
         <div><div class="k">淨利年增%</div><div class="v">${cell(fin.net_yoy, 1, true)}</div></div>
         <div><div class="k">營益年增%</div><div class="v">${cell(fin.op_yoy, 1, true)}</div></div>
       </div>
-      <h2>歷年本益比</h2>
-      <div class="card"><div class="chart-wrap">
-        <div class="chart-scroll"><svg class="chart" id="stockChart" role="img" aria-label="${base.n} 歷年本益比"></svg></div>
+      <h4>歷年本益比</h4>
+      <div class="card" style="margin-top:12px"><div class="chart-wrap">
+        <div class="chart-scroll"><svg class="chart" id="stockChart" role="img" aria-label="${esc(base.n)} 歷年本益比"></svg></div>
         <div class="tooltip" id="stockTip" hidden></div>
       </div></div>
     </div>`;
     document.body.appendChild(ov);
+    document.body.style.overflow = "hidden";
 
-    const close = () => ov.remove();
+    const close = () => {
+      ov.remove();
+      document.body.style.overflow = "";
+      document.removeEventListener("keydown", esc2);
+    };
+    function esc2(e) { if (e.key === "Escape") close(); }
     ov.querySelector(".close").addEventListener("click", close);
     ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
-    document.addEventListener("keydown", function esc(e) {
-      if (e.key === "Escape") { close(); document.removeEventListener("keydown", esc); }
-    });
+    document.addEventListener("keydown", esc2);
+    ov.querySelector(".close").focus();
 
     const hist = (d.hist || []).map(([ym, pe]) => [ym, pe]).filter((p) => p[1] != null);
     lineChart(ov.querySelector("#stockChart"), ov.querySelector("#stockTip"),
       hist.length ? [{ key: "pe", name: "本益比", color: SERIES[base.m], points: hist }] : [],
-      { unit: "倍", height: 240 });
+      { unit: "倍", height: MOBILE.matches ? 200 : 240 });
   }
 
   // ---------------------------------------------------------------- 事件
   /** attr = data-* 屬性名，key = state 上的欄位名 */
-  function bindSeg(id, attr, key, after, cast) {
-    const buttons = $(id).querySelectorAll("button");
+  function bindSeg(id, attr, key, after) {
+    const seg = $(id);
+    const buttons = [...seg.querySelectorAll("button")];
+    seg.style.setProperty("--n", buttons.length);
+    const paint = () => {
+      const i = buttons.findIndex((b) => b.getAttribute("aria-pressed") === "true");
+      seg.style.setProperty("--i", Math.max(0, i));
+    };
     buttons.forEach((b) =>
       b.addEventListener("click", () => {
         buttons.forEach((x) => x.setAttribute("aria-pressed", "false"));
         b.setAttribute("aria-pressed", "true");
-        const raw = b.dataset[attr];
-        state[key] = cast ? cast(raw) : raw;
+        paint();
+        state[key] = b.dataset[attr];
         after();
       })
     );
+    paint();
   }
 
   // ---------------------------------------------------------------- 漲幅排行
@@ -443,19 +630,27 @@
       ? gs.map((g) => {
           const w = (Math.abs(g.med) / maxAbs) * 100;
           const cls = g.med >= 0 ? "up" : "down";
-          return `<button type="button" class="grow" data-tag="${g.tag}">
-            <span class="gname">${g.tag}</span>
-            <span class="gbar"><span class="gfill ${cls}" style="width:${w.toFixed(1)}%"></span></span>
+          return `<button type="button" class="grow" data-tag="${esc(g.tag)}" data-w="${w.toFixed(1)}">
+            <span class="gname">${esc(g.tag)}</span>
+            <span class="gbar"><span class="gfill ${cls}"></span></span>
             <span class="gval ${g.med >= 0 ? "pos" : "neg"}">${g.med > 0 ? "+" : ""}${fmt(g.med, 1)}%</span>
             <span class="gn">${g.n} 檔</span>
           </button>`;
         }).join("")
       : '<p class="note">這個期間還沒有足夠的族群資料。</p>';
+
+    // 下一幀才設寬度，讓長條有一次生長動畫
+    requestAnimationFrame(() => {
+      $("groupBars").querySelectorAll(".grow").forEach((b) => {
+        b.querySelector(".gfill").style.width = b.dataset.w + "%";
+      });
+    });
+
     $("groupBars").querySelectorAll(".grow").forEach((b) =>
       b.addEventListener("click", () => {
         state.tag = b.dataset.tag; state.industry = ""; $("industry").value = "";
         state.shown = 200; applyFilters();
-        document.getElementById("tbl").scrollIntoView({ behavior: "smooth", block: "start" });
+        document.getElementById("stocks").scrollIntoView({ behavior: "smooth", block: "start" });
       })
     );
 
@@ -465,8 +660,8 @@
     $("rankList").innerHTML = list.length
       ? list.slice(0, 25).map((s) => `<li data-c="${s.c}">
           <span class="rc">${s.c}</span>
-          <span class="rn">${s.n}</span>
-          <span class="rt">${(s.t && s.t.length ? s.t : (s.i ? [s.i] : [])).map((t) => `<span class="tag static">${t}</span>`).join(" ")}</span>
+          <span class="rn">${esc(s.n)}</span>
+          <span class="rt">${(s.t && s.t.length ? s.t : (s.i ? [s.i] : [])).map((t) => `<span class="tag static">${esc(t)}</span>`).join(" ")}</span>
           <span class="rr ${s.r >= 0 ? "pos" : "neg"}">${s.r > 0 ? "+" : ""}${fmt(s.r, 1)}%</span>
         </li>`).join("")
       : `<li class="empty">${LABEL[state.moverMarket]}在這個期間還沒有資料。</li>`;
@@ -479,18 +674,21 @@
 
   // ---------------------------------------------------------------- 啟動
   (async function init() {
-    const [meta, market, rows, tags, movers] = await Promise.all([
+    const [meta, market, rows, tags, movers, history] = await Promise.all([
       getJSON("data/meta.json", null),
       getJSON("data/market.json", null),
       getJSON("data/latest.json", []),
       getJSON("data/tags.json", {}),
       getJSON("data/movers.json", null),
+      getJSON("data/market_history.json", null),
     ]);
     state.meta = meta; state.market = market;
     state.rows = rows || []; state.tags = tags || {}; state.movers = movers;
+    state.history = history;
 
-    $("asof").textContent = meta && meta.asOf
-      ? `資料日期 ${meta.asOf}・更新於 ${(meta.updatedAt || "").replace("T", " ").slice(0, 16)}`
+    // 更新時間在窄螢幕以 CSS 隱藏，只留資料日期，避免頂欄被截斷
+    $("asof").innerHTML = meta && meta.asOf
+      ? `${meta.asOf}<span class="asof-more">・更新於 ${esc((meta.updatedAt || "").replace("T", " ").slice(0, 16))}</span>`
       : "尚無資料 — 請先在 GitHub Actions 執行一次「每日更新」";
 
     if (meta) {
@@ -502,17 +700,23 @@
     if (cov) cov.textContent = String(Object.keys(state.tags).length);
 
     const inds = [...new Set(state.rows.map((r) => r.i).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-Hant"));
-    $("industry").innerHTML = '<option value="">所有產業</option>' + inds.map((i) => `<option>${i}</option>`).join("");
+    $("industry").innerHTML = '<option value="">所有產業</option>' + inds.map((i) => `<option>${esc(i)}</option>`).join("");
 
     renderHead();
+    renderHeroStats();
     draw();
     applyFilters();
 
     $("q").addEventListener("input", (e) => { state.q = e.target.value; state.shown = 200; applyFilters(); });
-    $("industry").addEventListener("change", (e) => { state.industry = e.target.value; state.shown = 200; applyFilters(); });
+    $("industry").addEventListener("change", (e) => {
+      state.industry = e.target.value; state.tag = ""; state.shown = 200; applyFilters();
+    });
     $("more").addEventListener("click", () => { state.shown += 300; renderBody(); });
     bindSeg("marketSeg", "market", "filterMarket", () => { state.shown = 200; applyFilters(); });
     bindSeg("periodSeg", "period", "period", renderMovers);
     bindSeg("moverMarketSeg", "mm", "moverMarket", renderMovers);
+
+    // 桌機／手機切換時重畫圖表尺寸
+    MOBILE.addEventListener("change", () => draw());
   })();
 })();
