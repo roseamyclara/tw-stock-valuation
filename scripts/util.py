@@ -62,6 +62,8 @@ _MIN_INTERVAL = {
     # SEC 公告的上限是每秒 10 次，這裡取一半當安全邊際
     "data.sec.gov": 0.2,
     "www.sec.gov": 0.2,
+    # Stooq 對連續請求很敏感，逐檔抓一定要放慢
+    "stooq.com": 1.0,
 }
 _last_hit: dict[str, float] = {}
 
