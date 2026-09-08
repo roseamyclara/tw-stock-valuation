@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f4f4f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#08080c" media="(prefers-color-scheme: dark)">
+<title>美股估值追蹤 — 本益比、股價營收比與季度成長率</title>
+<meta name="description" content="美國上市公司的本益比、股價營收比、淨值比與季度營收／獲利成長率，財報取自 SEC EDGAR 官方 XBRL 開放資料，每交易日自動更新。">
+<link rel="stylesheet" href="assets/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>📈</text></svg>">
+</head>
+<body>
+
+<header class="topbar" id="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="./">
+      <span class="brand-mark" aria-hidden="true">TW</span>
+      <span class="brand-txt">估值追蹤</span>
+    </a>
+    <nav class="market-nav" aria-label="選擇市場">
+      <a href="./">台股</a>
+      <a href="us.html" aria-current="page">美股</a>
+    </nav>
+    <span class="asof" id="asof">載入中…</span>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="切換深淺色"></button>
+  </div>
+</header>
+
+<div class="wrap" id="top">
+
+  <section class="hero">
+    <h1>美股<br>現在貴不貴</h1>
+    <p class="lede">
+      美國上市公司的本益比、股價營收比與淨值比，加上最近一季的營收與獲利年增率。
+      財報全部取自 SEC EDGAR 的官方 XBRL 開放資料。
+    </p>
+    <div class="hero-stats" id="heroStats"></div>
+  </section>
+
+  <section class="section" id="market">
+    <div class="section-head">
+      <h2>市場估值水準</h2>
+      <p class="note">
+        全市場成分股的中位數，市值加權值另列於卡片下方。
+        <strong>美國公司不公布月營收</strong>——只有季報，所以這裡的成長率是
+        「最近一季 vs 去年同季」，跟台股頁的月營收年增率不是同一個東西。
+      </p>
+    </div>
+    <div class="tiles one" id="tiles">
+      <div class="skeleton sk-tile"></div>
+    </div>
+  </section>
+
+  <section class="section" id="stocks">
+    <div class="stock-bar">
+      <div class="stock-bar-head">
+        <h2>個股指標</h2>
+        <span class="count" id="count"></span>
+      </div>
+      <div class="filters">
+        <div class="search">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.8"/><path d="m13.5 13.5 3.5 3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <input type="search" id="q" placeholder="搜尋代號、名稱或業務標籤" aria-label="搜尋代號、名稱或業務標籤">
+        </div>
+        <div class="select">
+          <select id="tagSel" aria-label="選擇業務標籤"><option value="">所有標籤</option></select>
+        </div>
+        <div class="select sort-mobile">
+          <select id="sortMobile" aria-label="排序依據"></select>
+        </div>
+      </div>
+    </div>
+
+    <details class="disclosure">
+      <summary>資料怎麼來的？有哪些限制？</summary>
+      <p class="note">
+        財報數字來自 <a href="https://www.sec.gov/search-filings/edgar-application-programming-interfaces" rel="noopener">SEC EDGAR 的 XBRL frames API</a>，
+        本益比與 EPS 用最近四季加總（TTM），缺任何一季就留白。
+        股價營收比為市值 ÷ 近四季營收，淨值比為市值 ÷ 股東權益。
+      </p>
+      <p class="note">
+        <strong>已知限制</strong>：SEC 的季度資料框只收會計季與日曆季對齊的公司，
+        非日曆年度結算的公司會被漏掉。營收在不同公司會用不同的會計科目，
+        程式依序比對四個常見科目，仍有部分公司對不上。SEC 不發布股價，
+        報價來自另一個免費來源，若當日抓不到，該股的估值比率會留白。
+      </p>
+      <p class="note">
+        <strong>業務標籤是自動產生的</strong>：依「這檔股票被哪些主題型 ETF 持有」反推，
+        再用相對大盤權重過濾掉純粹當底倉的權值股。它抓的是市場對這家公司的歸類，
+        不是公司自己的業務描述，顆粒度也比台股頁的人工標籤粗，僅供快速分群。
+      </p>
+    </details>
+
+    <div class="table-scroll">
+      <table id="tbl">
+        <thead><tr id="thead"></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="stock-cards" id="cards"></div>
+
+    <button class="more" id="more" type="button" hidden>顯示更多</button>
+  </section>
+
+  <footer>
+    <p>
+      財報來源：<a href="https://www.sec.gov/search-filings/edgar-application-programming-interfaces" rel="noopener">SEC EDGAR XBRL API</a>。
+      本站僅整理公開資料，不構成投資建議。
+      <a href="https://github.com/roseamyclara/tw-stock-valuation" rel="noopener">原始碼</a>
+    </p>
+    <p id="coverage"></p>
+  </footer>
+</div>
+
+<button class="to-top" id="toTop" type="button" aria-label="回到頁首">
+  <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 16V5m0 0L5 10m5-5 5 5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+</button>
+
+<script src="assets/us.js"></script>
+</body>
+</html>
