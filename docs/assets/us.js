@@ -19,9 +19,12 @@
   const human = (n) => {
     if (n === null || n === undefined) return null;
     const a = Math.abs(n);
+    // 台灣的位數是四位一跳（萬、億、兆），不是英文的三位一跳（thousand、
+    // million、billion）。這裡的數字是美元，但單位跟著讀的人走，
+    // 所以跟台股頁用同一套，不出現「十億」「百萬」這種直譯。
     if (a >= 1e12) return (n / 1e12).toFixed(2) + " 兆";
-    if (a >= 1e9) return (n / 1e9).toFixed(1) + " 十億";
-    if (a >= 1e6) return (n / 1e6).toFixed(0) + " 百萬";
+    if (a >= 1e8) return (n / 1e8).toFixed(1) + " 億";
+    if (a >= 1e4) return (n / 1e4).toFixed(0) + " 萬";
     return String(Math.round(n));
   };
 
