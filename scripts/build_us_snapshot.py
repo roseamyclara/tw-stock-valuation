@@ -13,8 +13,9 @@
       九月結算那種非日曆年度的公司會被漏掉，這是方法本身的限制。
 
 用法：
-    python build_us_snapshot.py                # 含報價（Stooq）
+    python build_us_snapshot.py                # 含報價（Nasdaq 整批清單）
     python build_us_snapshot.py --no-prices    # 只用 SEC 官方資料
+    python build_us_snapshot.py --prices stooq # 改用 Stooq（逐檔，只取前幾百檔）
     SEC_CONTACT="你的名字 you@example.com" python build_us_snapshot.py
 """
 from __future__ import annotations
@@ -29,43 +30,79 @@ from util import DATA_DIR, log, now_taipei, pct_change, rnd, write_json
 
 OUT_DIR = DATA_DIR / "us"
 
-# 需要幾季：最近 4 季算 TTM，再往前 1 季（去年同期）算年增率 → 共 5 季
-QUARTERS_BACK = 5
+# SEC 的季度資料框（CY2025Q4 這種）在第四季幾乎是空的 —— 多數公司不單獨
+# 申報第四季，數字併在年報裡。因此「最近四季相加」在一年裡的多數時間都算不出
+# TTM（實測 4812 家只有 170 家有 EPS）。改成以年報為錨：
+#     TTM = 上一個完整年度 + 今年至今 − 去年同期至今
+# 四季都齊全時仍優先用直接相加，那個最精確。
 
 
-def recent_quarters(n: int) -> list[tuple[int, int]]:
-    """回傳最近 n 個「已經有人報完」的日曆季，新到舊。
-
-    財報有落後，最近一季通常還沒填滿，所以從兩季前開始往回數。
-    """
+def anchor_quarter() -> tuple[int, int]:
+    """最近一個「大家都報完了」的日曆季。財報有落後，所以從兩季前算起。"""
     today = date.today()
     y, q = today.year, (today.month - 1) // 3 + 1
-    for _ in range(2):  # 退兩季，避開還沒報完的期間
+    for _ in range(2):
         q -= 1
         if q == 0:
             y, q = y - 1, 4
-    out = []
-    for _ in range(n):
-        out.append((y, q))
-        q -= 1
-        if q == 0:
-            y, q = y - 1, 4
-    return out
+    return y, q
+
+
+def back(y: int, q: int, n: int) -> tuple[int, int]:
+    """往前數 n 季。"""
+    total = y * 4 + (q - 1) - n
+    return total // 4, total % 4 + 1
+
+
+def periods(cur: tuple[int, int] | None = None) -> dict:
+    """算出這次要抓哪些期間，以及 TTM 的兩條算法各需要哪幾季。"""
+    y, k = cur or anchor_quarter()
+    consecutive = [back(y, k, i) for i in range(4)]          # 直接相加用
+    if k == 4:
+        # 第四季本身就是一個完整年度，年報直接就是 TTM
+        ytd_cur: list[tuple[int, int]] = []
+        ytd_prev: list[tuple[int, int]] = []
+        fy = y
+    else:
+        ytd_cur = [(y, i) for i in range(1, k + 1)]
+        ytd_prev = [(y - 1, i) for i in range(1, k + 1)]
+        fy = y - 1
+    same_q_ly = (y - 1, k)
+    quarters = sorted(
+        set(consecutive + ytd_cur + ytd_prev + [same_q_ly, (y - 1, 4)]),
+        reverse=True,
+    )
+    return {
+        "cur": (y, k),
+        "same_q_ly": same_q_ly,
+        "consecutive": consecutive,
+        "ytd_cur": ytd_cur,
+        "ytd_prev": ytd_prev,
+        "fy": fy,
+        "quarters": quarters,
+    }
 
 
 def ccp(y: int, q: int, *, instant: bool = False) -> str:
     return f"CY{y}Q{q}I" if instant else f"CY{y}Q{q}"
 
 
-def collect() -> tuple[dict, list[tuple[int, int]]]:
-    """把需要的科目一次抓齊，回傳 {科目: {期間: {cik: 值}}}。"""
-    qs = recent_quarters(QUARTERS_BACK)
-    log(f"期間：{'、'.join(f'{y}Q{q}' for y, q in qs)}")
+# 年報用的科目（都是期間型；股東權益與股數是時點型，用不到年報）
+ANNUAL_TAGS = {
+    "net": ("NetIncomeLoss", "USD"),
+    "gp": ("GrossProfit", "USD"),
+    "eps": ("EarningsPerShareDiluted", "USD-per-shares"),
+}
 
-    data: dict[str, dict[tuple[int, int], dict[int, float]]] = {
-        "rev": {}, "net": {}, "gp": {}, "eps": {}, "eq": {}, "sh": {},
-    }
-    for y, q in qs:
+
+def collect() -> tuple[dict, dict]:
+    """把需要的科目一次抓齊，回傳 {科目: {期間: {cik: 值}}} 與期間設定。"""
+    P = periods()
+    log(f"基準季：{P['cur'][0]}Q{P['cur'][1]}；"
+        f"季度框：{'、'.join(f'{y}Q{q}' for y, q in P['quarters'])}；年報：CY{P['fy']}")
+
+    data: dict[str, dict] = {"rev": {}, "net": {}, "gp": {}, "eps": {}, "eq": {}, "sh": {}}
+    for y, q in P["quarters"]:
         period, inst = ccp(y, q), ccp(y, q, instant=True)
         data["rev"][(y, q)] = U.revenue_frame(period)
         data["net"][(y, q)] = U.frame("NetIncomeLoss", "USD", period)
@@ -74,45 +111,65 @@ def collect() -> tuple[dict, list[tuple[int, int]]]:
         data["eq"][(y, q)] = U.frame("StockholdersEquity", "USD", inst)
         data["sh"][(y, q)] = U.frame("EntityCommonStockSharesOutstanding", "shares", inst,
                                      tax="dei")
-    return data, qs
+
+    fy = f"CY{P['fy']}"
+    annual = {"rev": U.revenue_frame(fy)}
+    for key, (tag, uom) in ANNUAL_TAGS.items():
+        annual[key] = U.frame(tag, uom, fy)
+    data["annual"] = annual
+    return data, P
 
 
-def ttm(series: dict[tuple[int, int], dict[int, float]], qs: list[tuple[int, int]],
-        cik: int) -> float | None:
-    """最近四季加總。缺任何一季就不給值 —— 寧可留白也不要給半年當一年。"""
-    vals = []
-    for key in qs[:4]:
+def ttm(series: dict[tuple[int, int], dict[int, float]], P: dict, cik: int,
+        annual: dict[int, float] | None = None) -> float | None:
+    """近四季合計。先試直接相加，不齊再用年報錨定；兩條都湊不齊就留白。"""
+    vals = [series.get(key, {}).get(cik) for key in P["consecutive"]]
+    if all(v is not None for v in vals):
+        return sum(vals)
+
+    if annual is None:
+        return None
+    total = annual.get(cik)
+    if total is None:
+        return None
+    for key in P["ytd_cur"]:
         v = series.get(key, {}).get(cik)
         if v is None:
             return None
-        vals.append(v)
-    return sum(vals)
+        total += v
+    for key in P["ytd_prev"]:
+        v = series.get(key, {}).get(cik)
+        if v is None:
+            return None
+        total -= v
+    return total
 
 
-def latest(series: dict[tuple[int, int], dict[int, float]], qs: list[tuple[int, int]],
+def latest(series: dict[tuple[int, int], dict[int, float]], P: dict,
            cik: int) -> float | None:
-    for key in qs:
+    for key in P["quarters"]:
         v = series.get(key, {}).get(cik)
         if v is not None:
             return v
     return None
 
 
-def build(no_prices: bool) -> None:
+def build(source: str = "nasdaq") -> None:
     tickers = U.sec_tickers()
     log(f"SEC 代號對照表：{len(tickers)} 家")
 
-    data, qs = collect()
-    cur, prev = qs[0], qs[4]  # 最近一季 vs 去年同期
+    data, P = collect()
+    cur, prev = P["cur"], P["same_q_ly"]
+    ann = data["annual"]
 
     rows = []
     for cik, info in tickers.items():
-        rev_ttm = ttm(data["rev"], qs, cik)
-        net_ttm = ttm(data["net"], qs, cik)
-        eps_ttm = ttm(data["eps"], qs, cik)
-        gp_ttm = ttm(data["gp"], qs, cik)
-        equity = latest(data["eq"], qs, cik)
-        shares = latest(data["sh"], qs, cik)
+        rev_ttm = ttm(data["rev"], P, cik, ann["rev"])
+        net_ttm = ttm(data["net"], P, cik, ann["net"])
+        eps_ttm = ttm(data["eps"], P, cik, ann["eps"])
+        gp_ttm = ttm(data["gp"], P, cik, ann["gp"])
+        equity = latest(data["eq"], P, cik)
+        shares = latest(data["sh"], P, cik)
 
         rev_q = data["rev"].get(cur, {}).get(cik)
         rev_q_ly = data["rev"].get(prev, {}).get(cik)
@@ -145,18 +202,23 @@ def build(no_prices: bool) -> None:
     log(f"有基本面的公司：{len(rows)}")
 
     # ---- 報價 ----
-    prices: dict[str, float] = {}
-    if not no_prices:
-        provider = U.PRICE_PROVIDERS["stooq"]
-        log(f"抓報價（{len(rows)} 檔）…")
-        prices = provider([r["c"] for r in rows])
-        log(f"抓到報價：{len(prices)} 檔")
+    quotes: dict[str, dict] = {}
+    if source != "none":
+        log(f"抓報價（來源 {source}）…")
+        quotes = U.QUOTE_PROVIDERS[source]([r["c"] for r in rows]) or {}
+        hit = sum(1 for r in rows if r["c"] in quotes)
+        log(f"對得上的報價：{hit}/{len(rows)} 檔")
+        if hit == 0:
+            log("  警告：一檔都沒對上，估值比率會全部留白")
 
     for r in rows:
-        p = prices.get(r["c"])
+        q = quotes.get(r["c"]) or {}
+        p = q.get("p")
         r["p"] = rnd(p)
         shares, equity, fin = r.pop("shares"), r.pop("equity"), r["fin"]
-        cap = p * shares if p and shares else None
+        # 市值優先用「股價 × SEC 申報股數」，跟財報同源；沒有股數才退而用
+        # 報價來源自己給的市值。
+        cap = p * shares if p and shares else q.get("cap")
         r["cap"] = round(cap) if cap else None
         r["pe"] = rnd(p / fin["eps"]) if p and fin["eps"] and fin["eps"] > 0 else None
         r["ps"] = rnd(cap / fin["rev"]) if cap and fin["rev"] and fin["rev"] > 0 else None
@@ -169,6 +231,7 @@ def build(no_prices: bool) -> None:
     pes = [r["pe"] for r in rows if r["pe"]]
     pss = [r["ps"] for r in rows if r["ps"]]
     caps = [r["cap"] for r in rows if r["cap"]]
+    with_price = sum(1 for r in rows if r["p"])
     total_cap = sum(caps)
     total_net = sum(r["fin"]["net"] for r in rows if r["fin"]["net"] and r["cap"])
     market = {
@@ -192,10 +255,10 @@ def build(no_prices: bool) -> None:
         "updatedAt": now_taipei().strftime("%Y-%m-%dT%H:%M:%S"),
         "quarter": f"{cur[0]}Q{cur[1]}",
         "total": len(rows),
-        "withPrice": len(prices),
+        "withPrice": with_price,
         "withPE": len(pes),
         "withPS": len(pss),
-        "priceSource": "none" if no_prices else "stooq",
+        "priceSource": source,
         "counts": {"us": len(rows)},
     }
 
@@ -206,15 +269,18 @@ def build(no_prices: bool) -> None:
     write_json(OUT_DIR / "latest.json", rows)
     write_json(OUT_DIR / "market.json", market)
     write_json(OUT_DIR / "meta.json", meta)
-    log(f"完成：{len(rows)} 檔，有本益比 {len(pes)}、有股價營收比 {len(pss)}")
+    log(f"完成：{len(rows)} 檔，有報價 {with_price}、有本益比 {len(pes)}、"
+        f"有股價營收比 {len(pss)}")
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--prices", default="nasdaq", choices=sorted(U.QUOTE_PROVIDERS),
+                    help="報價來源（預設 nasdaq，整批一次抓完）")
     ap.add_argument("--no-prices", action="store_true",
                     help="不抓報價，只用 SEC 官方資料（估值比率會留空）")
     args = ap.parse_args()
-    build(args.no_prices)
+    build("none" if args.no_prices else args.prices)
     return 0
 
 
