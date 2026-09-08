@@ -16,7 +16,7 @@ import io
 import os
 from typing import Any
 
-from util import FetchError, get_json, log, session, try_json
+from util import FetchError, _wait_turn, get_json, log, session, try_json
 
 SEC_CONTACT = os.environ.get("SEC_CONTACT", "tw-stock-valuation contact@example.com")
 SEC_HEADERS = {"User-Agent": SEC_CONTACT, "Accept-Encoding": "gzip, deflate"}
@@ -75,18 +75,65 @@ def revenue_frame(ccp: str) -> dict[int, float]:
 
 # ------------------------------------------------------------------ 報價
 
-def prices_stooq(tickers: list[str]) -> dict[str, float]:
-    """Stooq 的免費日線 CSV。一次一檔，所以只對有基本面的個股抓。
+# Nasdaq 自家頁面在用的上市股票清單端點。一次請求就拿回三個交易所的
+# 收盤價與市值 —— 先前用 Stooq 逐檔抓，四千多次請求會被對方整批擋掉，
+# 實測 4812 檔一檔都沒抓到。這裡改成整批，全程只打一次。
+NASDAQ_SCREENER = (
+    "https://api.nasdaq.com/api/screener/stocks"
+    "?tableonly=true&limit=25000&download=true"
+)
 
-    這是全流程唯一的非官方來源 —— SEC 不發布報價，美國交易所也沒有免費的
-    整批收盤檔。若要維持「全部資料都來自官方」，用 --no-prices 跑，
-    本益比／股價營收比／淨值比會留空，但 EPS、營收年增、利潤率仍然有。
+
+def _money(text: Any) -> float | None:
+    """把 "$230.36"、"5,551,676,000,000" 這種字串轉成數字，非正數當沒有。"""
+    if text is None:
+        return None
+    s = str(text).replace("$", "").replace(",", "").strip()
+    if not s or s in {"N/A", "--", "0", "0.00"}:
+        return None
+    try:
+        v = float(s)
+    except ValueError:
+        return None
+    return v if v > 0 else None
+
+
+def quotes_nasdaq(_tickers: list[str] | None = None) -> dict[str, dict[str, float | None]]:
+    """ticker -> {"p": 收盤價, "cap": 市值}。抓不到就回空的。
+
+    非官方端點，但它是 nasdaq.com 自己的個股清單頁在用的，資料是前一個
+    交易日收盤。多股別的代號 Nasdaq 寫成 BRK/B、SEC 寫成 BRK-B，兩種都建索引。
+    未在三大交易所掛牌（OTC）的公司這裡本來就沒有，會留白。
     """
-    out: dict[str, float] = {}
+    payload = try_json(NASDAQ_SCREENER, tries=3, headers={"Accept": "application/json"})
+    rows = ((payload or {}).get("data") or {}).get("rows") or []
+    out: dict[str, dict[str, float | None]] = {}
+    for row in rows:
+        sym = str(row.get("symbol") or "").strip().upper()
+        price = _money(row.get("lastsale"))
+        if not sym or price is None:
+            continue
+        rec = {"p": price, "cap": _money(row.get("marketCap"))}
+        out[sym] = rec
+        if "/" in sym:
+            out.setdefault(sym.replace("/", "-"), rec)
+    log(f"  Nasdaq 清單 {len(rows)} 檔，可用報價 {len(out)} 檔")
+    return out
+
+
+# Stooq 一檔一個請求，只適合小批。留著當備援，但預設不用。
+STOOQ_MAX = 600
+
+
+def quotes_stooq(tickers: list[str]) -> dict[str, dict[str, float | None]]:
+    """Stooq 的免費日線 CSV。逐檔抓且會被限流，所以只取前 STOOQ_MAX 檔。"""
+    out: dict[str, dict[str, float | None]] = {}
     s = session()
-    for i, t in enumerate(tickers, 1):
+    picked = tickers[:STOOQ_MAX]
+    for i, t in enumerate(picked, 1):
         url = f"https://stooq.com/q/d/l/?s={t.lower()}.us&i=d"
         try:
+            _wait_turn(url)
             r = s.get(url, timeout=30)
             if r.status_code != 200 or not r.text.startswith("Date"):
                 continue
@@ -95,15 +142,16 @@ def prices_stooq(tickers: list[str]) -> dict[str, float]:
                 continue
             close = rows[-1].get("Close")
             if close and close != "N/D":
-                out[t] = float(close)
+                out[t] = {"p": float(close), "cap": None}
         except Exception:  # noqa: BLE001
             continue
-        if i % 250 == 0:
-            log(f"  報價 {i}/{len(tickers)} …")
+        if i % 100 == 0:
+            log(f"  報價 {i}/{len(picked)}，成功 {len(out)}")
     return out
 
 
-PRICE_PROVIDERS = {
-    "stooq": prices_stooq,
+QUOTE_PROVIDERS = {
+    "nasdaq": quotes_nasdaq,
+    "stooq": quotes_stooq,
     "none": lambda tickers: {},
 }
