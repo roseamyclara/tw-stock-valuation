@@ -245,6 +245,34 @@ button, input, select, textarea { font: inherit; }
   box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
+/* 台股／美股切換，放在頂欄品牌右邊 */
+.market-nav {
+  display: inline-flex;
+  flex: none;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.market-nav a {
+  padding: 5px 13px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--muted);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color .18s var(--ease), background .18s var(--ease);
+}
+.market-nav a:hover { color: var(--text-secondary); }
+.market-nav a[aria-current="page"] {
+  color: var(--text-primary);
+  font-weight: 640;
+  background: var(--surface-1);
+  box-shadow: var(--shadow-1);
+}
+
 .asof {
   color: var(--muted);
   font-size: 12.5px;
@@ -397,6 +425,8 @@ button, input, select, textarea { font: inherit; }
   grid-template-columns: repeat(auto-fit, minmax(268px, 1fr));
   gap: 14px;
 }
+/* 美股只有一個板塊，讓卡片自己收斂，不要拉成一整條 */
+.tiles.one { grid-template-columns: minmax(0, 460px); }
 .tile {
   position: relative;
   overflow: hidden;
@@ -1086,6 +1116,7 @@ footer a:hover { color: var(--accent); border-bottom-color: var(--accent); }
   .brand-txt { font-size: 14.5px; }
   .asof { font-size: 11.5px; }
   .asof-more { display: none; }
+  .market-nav a { padding: 5px 10px; font-size: 12.5px; }
 
   .hero { padding: 24px 0 22px; }
   .hero .lede { font-size: 14.5px; }
@@ -1120,6 +1151,11 @@ footer a:hover { color: var(--accent); border-bottom-color: var(--accent); }
   .kv .v { font-size: 17px; }
 
   svg.chart { min-width: 380px; }
+}
+
+/* 頂欄擠不下時先犧牲站名文字，市場切換與資料日期比較重要 */
+@media (max-width: 560px) {
+  .brand-txt { display: none; }
 }
 
 @media (max-width: 380px) {
