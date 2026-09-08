@@ -59,6 +59,9 @@ _MIN_INTERVAL = {
     "openapi.twse.com.tw": 4.0,
     "www.twse.com.tw": 1.5,
     "www.tpex.org.tw": 1.0,
+    # SEC 公告的上限是每秒 10 次，這裡取一半當安全邊際
+    "data.sec.gov": 0.2,
+    "www.sec.gov": 0.2,
 }
 _last_hit: dict[str, float] = {}
 
@@ -81,9 +84,16 @@ def get_json(
     tries: int = 5,
     timeout: int = 45,
     referer: str | None = None,
+    headers: dict[str, str] | None = None,
 ) -> Any:
-    """抓 JSON。被流量保護擋下時退避重試；仍失敗則丟 FetchError。"""
-    headers = {"Referer": referer} if referer else {}
+    """抓 JSON。被流量保護擋下時退避重試；仍失敗則丟 FetchError。
+
+    headers 用來蓋掉預設值 —— SEC 要求 User-Agent 必須帶得到人的聯絡方式，
+    不能用瀏覽器字串冒充。
+    """
+    headers = dict(headers or {})
+    if referer:
+        headers["Referer"] = referer
     last: Exception | None = None
     for attempt in range(tries):
         if attempt:
