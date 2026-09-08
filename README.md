@@ -1,9 +1,9 @@
 # 台股估值與成長率追蹤
 
 台灣股市 **上市／上櫃／興櫃** 三個板塊的估值與成長指標，每交易日自動更新，
-以 GitHub Pages 呈現。
+以 GitHub Pages 呈現。另有一個 **美股** 分頁，資料取自 SEC EDGAR 官方開放資料。
 
-網站：<https://roseamyclara.github.io/tw-stock-valuation/>
+網站：<https://roseamyclara.github.io/tw-stock-valuation/>（頂欄可切換台股／美股）
 
 ## 指標
 
@@ -39,6 +39,11 @@ GitHub Actions (排程)
     └─ scripts/backfill_history.py  手動：回補近十年歷史（初次建置用）
     │
     └──> docs/data/*.json ──> docs/index.html（GitHub Pages 靜態網站）
+
+GitHub Actions (排程，美股)
+    │
+    └─ scripts/build_us_snapshot.py  每交易日：SEC EDGAR 財報 + 報價
+       └──> docs/data/us/*.json ──> docs/us.html
 ```
 
 網站本身是純靜態頁面，直接讀取 repo 內的 JSON，不需要後端。
@@ -95,6 +100,63 @@ python -m http.server -d ../docs 8000   # 開 http://localhost:8000
 
 每日更新流程不會動到這個檔案。
 
+## 美股頁（docs/us.html）
+
+網站有第二個分頁 `us.html`，頂欄可以在台股／美股之間切換。
+
+**財報全部來自 [SEC EDGAR 的 XBRL frames API](https://www.sec.gov/search-filings/edgar-application-programming-interfaces)**，
+一樣是官方開放資料、免申請免金鑰。用 frames 而不是 companyfacts 的原因：
+companyfacts 一家一支 API，五千多家要打五千多次；frames 是「一個會計科目 ×
+一個期間 → 全市場」，抓完整份快照只要二十幾次請求。
+
+| 指標 | 算法 |
+|---|---|
+| **本益比** | 股價 ÷ 近四季 EPS 加總（TTM）。缺任何一季就留白 |
+| **股價營收比** | 市值 ÷ 近四季營收 |
+| **淨值比** | 市值 ÷ 股東權益 |
+| **季營收／淨利年增率** | 最近一季 vs 去年同季 |
+| **毛利率、淨利率** | 近四季合計 |
+
+跟台股頁刻意不一樣的地方，都是制度差異不是偷懶：
+
+- **沒有月營收年增率。** 美國公司不公布月營收，只有季報，所以改用季度年增率。
+- **沒有殖利率。** 要自己從股利科目推，XBRL 裡這塊很雜，先不做。
+- **沒有漲幅排行與族群。** 那需要每日收盤價的歷史，目前只存最新報價。
+
+### 美股資料的邊界
+
+- **SEC 的季度資料框只收會計季與日曆季對齊的公司。** 九月結算那種非日曆年度的
+  公司會被漏掉，這是 frames API 本身的限制。
+- **營收的會計科目不統一。** `RevenueFromContractWithCustomerExcludingAssessedTax`
+  涵蓋約 2,555 家、`Revenues` 約 1,926 家（2025Q2 實測），程式依序比對四個常見
+  科目取聯集，仍有部分公司對不上。
+- **SEC 不發布股價**，美國交易所也沒有免費的整批收盤檔。報價預設走 Stooq，
+  這是全流程唯一的非官方來源。若要維持「全部資料都來自官方」，用
+  `--no-prices` 跑，本益比／股價營收比／淨值比會留空，但 EPS、營收年增、
+  利潤率仍然有。
+
+### 美股的業務標籤（docs/data/us/tags.json）
+
+**不是人工整理的，是自動反推的** —— 依「這檔股票被哪些主題型 ETF 持有」推出
+標籤，再用相對大盤權重過濾掉純粹當底倉的權值股（沒有這道過濾，MSFT 會因為
+每檔主題 ETF 都拿它當底倉而被貼上「電動車、自駕」）。
+
+它抓的是市場對這家公司的歸類，不是公司自己的業務描述，涵蓋 492 檔、35 種標籤，
+顆粒度比台股頁的人工標籤（1,423 檔、1,699 種）粗得多。要加標籤就是加 ETF。
+
+### 執行
+
+```bash
+cd scripts
+SEC_CONTACT="你的名字 you@example.com" python build_us_snapshot.py
+python build_us_snapshot.py --no-prices   # 只用 SEC 官方資料
+python test_us_snapshot.py                # 離線測試，不連網
+```
+
+SEC 要求 User-Agent 帶得到人的聯絡方式。GitHub Actions 會讀 repo variable
+`SEC_CONTACT`（Settings → Secrets and variables → Actions → Variables）。
+**沒設定的話 SEC 會擋，第一次跑之前記得先設。**
+
 ## 什麼會自動更新，什麼不會
 
 「每日更新」workflow 在**台北時間 15:23 與 19:23**（週一至五）各跑一次：
@@ -116,6 +178,8 @@ python -m http.server -d ../docs 8000   # 開 http://localhost:8000
 | 各年度估值走勢 `history/` | 每交易日刷新當月、跨月自動新增 | |
 | 個股歷史頁 `stock/` | 每交易日重建，內容實際上每月變一次 | |
 | **業務標籤 `tags.json`** | **不會自動更新** | 人工整理，要改直接編輯該檔 |
+| 美股 `data/us/` | 每交易日 | 由「美股每日更新」workflow 產生，UTC 23:17 |
+| 美股標籤 `data/us/tags.json` | **不會自動更新** | 由主題 ETF 持股反推，要更新得重跑產生器 |
 
 興櫃的 5／10／30 日漲幅是從本站開始收集後逐日累積的（官方沒有整批的興櫃歷史
 每日行情端點），累積滿對應天數後才會出現。
