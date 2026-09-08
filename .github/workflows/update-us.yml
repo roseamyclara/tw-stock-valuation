@@ -1,0 +1,56 @@
+name: 美股每日更新
+
+# 美股收盤 16:00 ET。夏令 UTC 20:00、冬令 UTC 21:00，
+# 取 UTC 23:17 一次跑完（兩季都在收盤後），分鐘避開整點尖峰。
+# SEC 的財報一天內不會變，所以一天一次就夠。
+on:
+  schedule:
+    - cron: "17 23 * * 2-6"
+  workflow_dispatch:
+    inputs:
+      no_prices:
+        description: "只用 SEC 官方資料，不抓報價"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: data-update-us
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: 抓取並計算美股快照
+        working-directory: scripts
+        env:
+          # SEC 要求 User-Agent 帶得到人的聯絡方式，否則會被擋。
+          # 到 repo 的 Settings → Secrets and variables → Actions → Variables
+          # 新增 SEC_CONTACT，例如 "Rose Amy Clara rose@example.com"
+          SEC_CONTACT: ${{ vars.SEC_CONTACT }}
+        run: python build_us_snapshot.py ${{ inputs.no_prices && '--no-prices' || '' }}
+
+      - name: commit 資料
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data/us
+          if git diff --staged --quiet; then
+            echo "資料無變化，跳過 commit"
+          else
+            git commit -m "美股資料更新 $(TZ=Asia/Taipei date +%Y-%m-%d)"
+            git push
+          fi
