@@ -143,12 +143,14 @@
       </p>
     </details>
 
-    <!-- 桌機：完整表格 -->
-    <div class="table-scroll">
-      <table id="tbl">
-        <thead><tr id="thead"></tr></thead>
-        <tbody id="tbody"></tbody>
-      </table>
+    <!-- 桌機：完整表格。外層 table-shell 只負責右緣的「還有欄位」漸層 -->
+    <div class="table-shell">
+      <div class="table-scroll">
+        <table id="tbl">
+          <thead><tr id="thead"></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
     </div>
 
     <!-- 手機：卡片列表 -->
