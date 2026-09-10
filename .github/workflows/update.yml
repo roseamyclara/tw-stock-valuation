@@ -37,6 +37,13 @@ jobs:
         working-directory: scripts
         run: python rebuild_history.py
 
+      # 集保每週五結算、隔週公布。天天跑無妨：資料日期沒變就只是覆蓋同一筆，
+      # 不會在歷史裡多長一週。集保掛掉也不該讓整個更新失敗。
+      - name: 集保大戶持股
+        working-directory: scripts
+        run: python build_tdcc.py
+        continue-on-error: true
+
       - name: commit 資料
         run: |
           git config user.name  "github-actions[bot]"
