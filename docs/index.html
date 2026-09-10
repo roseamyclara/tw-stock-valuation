@@ -132,6 +132,15 @@
         不是官方資料，僅供快速辨識，可能有錯或過時，請以公司公告為準；目前涵蓋 2,342 檔中的
         <span id="tagCoverage">—</span> 檔。虛線外框的標籤則是官方開放資料的產業別，用於尚未整理到的公司。
       </p>
+      <p class="note">
+        <strong>關於大戶持股</strong>：「400張以上%」來自
+        <a href="https://opendata.tdcc.com.tw/" rel="noopener">集保結算所的集保戶股權分散表</a>，
+        指持有 400 張（400,000 股）以上的股東，其持股占<strong>集保庫存</strong>的比例
+        —— 分母是存在集保的股數，不是發行股數。集保每週五結算、隔週公布，
+        「大戶月增減」是與四週前那一週相比的<strong>百分點</strong>差。
+        要注意這裡的「大戶」是以集保帳戶為單位，外資保管銀行、政府基金、公司派持股都會落在這一級，
+        不等於市場俗稱的「主力」。<span id="tdccNote">—</span>
+      </p>
     </details>
 
     <!-- 桌機：完整表格 -->
@@ -151,7 +160,8 @@
   <footer>
     <p>
       資料來源：<a href="https://openapi.twse.com.tw/" rel="noopener">臺灣證券交易所 OpenAPI</a>、
-      <a href="https://www.tpex.org.tw/openapi/" rel="noopener">證券櫃檯買賣中心 OpenAPI</a>。
+      <a href="https://www.tpex.org.tw/openapi/" rel="noopener">證券櫃檯買賣中心 OpenAPI</a>、
+      <a href="https://opendata.tdcc.com.tw/" rel="noopener">臺灣集中保管結算所開放資料</a>。
       本站僅整理公開資料，不構成投資建議。
       <a href="https://github.com/roseamyclara/tw-stock-valuation" rel="noopener">原始碼</a>
     </p>
