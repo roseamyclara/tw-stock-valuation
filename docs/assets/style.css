@@ -813,6 +813,20 @@ svg.chart circle.pt { stroke: var(--surface-1); stroke-width: 2.5; }
 .sort-mobile { display: none; }
 
 /* ============================================================ 表格（桌機） */
+.table-shell { position: relative; }
+/* 右緣漸層：提示表格還有欄位在右邊。由 app.js 依實際是否可捲動切換 */
+.table-shell::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 52px;
+  border-radius: 0 var(--r-lg) var(--r-lg) 0;
+  background: linear-gradient(to left, var(--surface-1) 30%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .18s var(--ease);
+}
+.table-shell.has-more::after { opacity: 1; }
 .table-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -832,7 +846,7 @@ thead th {
   font-weight: 600;
   font-size: 12px;
   color: var(--muted);
-  padding: 12px 12px;
+  padding: 12px 9px;
   white-space: nowrap;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
@@ -881,7 +895,7 @@ thead th[aria-sort="ascending"], thead th[aria-sort="descending"] { color: var(-
 }
 .toast.is-on { opacity: 1; transform: translate(-50%, 0); }
 tbody td {
-  padding: 11px 12px;
+  padding: 11px 9px;
   text-align: right;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
@@ -1104,10 +1118,13 @@ footer a:hover { color: var(--accent); border-bottom-color: var(--accent); }
   .tile .fig .v { font-size: 30px; }
 }
 
-/* 表格在 1220px 以上塞得下，不需要水平捲動容器；
-   換成 clip 才不會建立捲動容器，表頭的 sticky 就能相對視窗生效 */
-@media (min-width: 1220px) {
+/* 只有在表格真的塞得下時才換成 clip —— clip 不會建立捲動容器，
+   表頭的 sticky 才能相對視窗生效。塞不下卻用 clip 會把右邊的欄位直接裁掉
+   而且捲不到（15 欄時代就踩過這個坑），所以斷點要跟著欄數走。 */
+@media (min-width: 1320px) {
   .table-scroll { overflow-x: clip; }
+  /* app.js 量到真的塞不下時會加上這個 class，寧可捲動也不要裁掉欄位 */
+  .table-scroll.is-scrollable { overflow-x: auto; }
 }
 
 /* ---- 平板以下：13 欄的表格改成卡片列表，個股面板改成底部抽屜 ---- */

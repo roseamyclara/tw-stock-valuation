@@ -357,8 +357,8 @@
     { k: "net_yoy", t: "淨利年增%", get: (r) => cell(r.fin && r.fin.net_yoy, 1, true), val: (r) => r.fin && r.fin.net_yoy },
     { k: "eps", t: "EPS", get: (r) => cell(r.fin && r.fin.eps), val: (r) => r.fin && r.fin.eps },
     // 籌碼面：集保股權分散表，一張 = 1,000 股，所以「400 張以上」= 400,000 股以上
-    { k: "big", t: "400張以上%", get: (r) => cell(tdccOf(r.c)[0]), val: (r) => tdccOf(r.c)[0] },
-    { k: "big_chg", t: "大戶月增減", get: (r) => cell(tdccOf(r.c)[1], 2, true), val: (r) => tdccOf(r.c)[1] },
+    { k: "big", t: "大戶持股%", sel: "400張以上大戶持股%", get: (r) => cell(tdccOf(r.c)[0]), val: (r) => tdccOf(r.c)[0] },
+    { k: "big_chg", t: "月增減", sel: "大戶持股月增減", get: (r) => cell(tdccOf(r.c)[1], 2, true), val: (r) => tdccOf(r.c)[1] },
   ];
 
   // 手機排序選單只放有意義的數值欄位
@@ -388,7 +388,8 @@
     const ind = s
       ? `<span class="sort-ind" aria-hidden="true">${s.dir > 0 ? "↑" : "↓"}<b>${i + 1}</b></span>`
       : "";
-    return `<th data-k="${c.k}" aria-sort="${aria}" title="${HEAD_HINT}">${c.t}${ind}</th>`;
+    const tip = c.sel ? `${c.sel}｜${HEAD_HINT}` : HEAD_HINT;
+    return `<th data-k="${c.k}" aria-sort="${aria}" title="${tip}">${c.t}${ind}</th>`;
   }
 
   /** 只重畫表頭（排序條件變動時呼叫），innerHTML 會換掉節點所以事件要重綁 */
@@ -406,7 +407,8 @@
     const sel = $("sortMobile");
     sel.innerHTML = SORTABLE.map((k) => {
       const c = COLS.find((x) => x.k === k);
-      return `<option value="${k}">${c.t}　由大到小</option><option value="${k}:asc">${c.t}　由小到大</option>`;
+      const t = c.sel || c.t;
+      return `<option value="${k}">${t}　由大到小</option><option value="${k}:asc">${t}　由小到大</option>`;
     }).join("");
     sel.value = DEFAULT_SORTS[0].k;
     // 手機的下拉選單維持單欄排序：選了就取代掉整組條件
@@ -484,6 +486,28 @@
     if (t instanceof Element && (t.closest(KEEP_SORT) || !t.isConnected)) return;
     resetSort();
   }, true);
+
+  /**
+   * 寬螢幕預設 overflow-x: clip（不建立捲動容器，表頭的 sticky 才能相對視窗生效），
+   * 但塞不下卻用 clip 會把右邊的欄位直接裁掉又捲不到。所以這裡實測一次寬度：
+   * 真的溢出就退回可捲動，並在右緣點一道漸層提示還有欄位。
+   * 用量的不用猜的 —— 欄寬會隨業務標籤的長度變動，媒體查詢猜不準。
+   */
+  const shell = document.querySelector(".table-shell");
+  const scroller = document.querySelector(".table-scroll");
+  function syncOverflowHint() {
+    if (!shell || !scroller) return;
+    const overflowing = scroller.scrollWidth - scroller.clientWidth > 1;
+    scroller.classList.toggle("is-scrollable", overflowing);
+    // 上一行可能改變 overflow-x，要在改完之後才讀
+    const clipped = getComputedStyle(scroller).overflowX === "clip";
+    shell.classList.toggle("has-more",
+      !clipped && overflowing && scroller.scrollWidth - scroller.clientWidth - scroller.scrollLeft > 2);
+  }
+  if (scroller) {
+    scroller.addEventListener("scroll", syncOverflowHint, { passive: true });
+    window.addEventListener("resize", syncOverflowHint);
+  }
 
   function applyFilters() {
     const q = state.q.trim().toLowerCase();
@@ -570,6 +594,7 @@
     });
 
     $("more").hidden = state.view.length <= state.shown;
+    syncOverflowHint();
 
     // 點標籤是篩選，不是打開個股。再點一次同一個就取消。
     const onPick = (el, code) => (e) => {
