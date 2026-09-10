@@ -33,6 +33,7 @@
 
   const state = {
     rows: [], view: [], meta: null, market: null, tags: {}, movers: null, history: null,
+    tdcc: { date: null, base: null, d: {} },
     // sorts: [{k, dir}]，最多 3 個，陣列順序就是優先序（索引 0 最優先）
     // 空陣列代表沒設任何條件，套用 DEFAULT_SORTS
     sorts: [], filterMarket: "", industry: "", tag: "", q: "",
@@ -40,6 +41,9 @@
   };
 
   const tagsOf = (code) => state.tags[code] || [];
+
+  // 集保「400 張以上」大股東：[占集保庫存比例%, 與四週前的差(百分點)]
+  const tdccOf = (code) => state.tdcc.d[code] || [null, null];
 
   // ---------------------------------------------------------------- 工具
   const fmt = (v, d = 2) =>
@@ -352,10 +356,14 @@
     { k: "rev_cum", t: "累計年增%", get: (r) => cell(r.rev && r.rev.cum_yoy, 1, true), val: (r) => r.rev && r.rev.cum_yoy },
     { k: "net_yoy", t: "淨利年增%", get: (r) => cell(r.fin && r.fin.net_yoy, 1, true), val: (r) => r.fin && r.fin.net_yoy },
     { k: "eps", t: "EPS", get: (r) => cell(r.fin && r.fin.eps), val: (r) => r.fin && r.fin.eps },
+    // 籌碼面：集保股權分散表，一張 = 1,000 股，所以「400 張以上」= 400,000 股以上
+    { k: "big", t: "400張以上%", get: (r) => cell(tdccOf(r.c)[0]), val: (r) => tdccOf(r.c)[0] },
+    { k: "big_chg", t: "大戶月增減", get: (r) => cell(tdccOf(r.c)[1], 2, true), val: (r) => tdccOf(r.c)[1] },
   ];
 
   // 手機排序選單只放有意義的數值欄位
-  const SORTABLE = ["cap", "p", "pe", "ps", "pb", "dy", "rev_yoy", "rev_cum", "net_yoy", "eps"];
+  const SORTABLE = ["cap", "p", "pe", "ps", "pb", "dy", "rev_yoy", "rev_cum", "net_yoy", "eps",
+                    "big", "big_chg"];
 
   // ------------------------------------------------------------ 多欄排序
   const DEFAULT_SORTS = [{ k: "cap", dir: -1 }];   // 沒設條件時：市值由大到小
@@ -522,6 +530,8 @@
       ["累計年增%", cell(r.rev && r.rev.cum_yoy, 1, true)],
       ["淨利年增%", cell(r.fin && r.fin.net_yoy, 1, true)],
       ["EPS", cell(r.fin && r.fin.eps)],
+      ["400張以上%", cell(tdccOf(r.c)[0])],
+      ["大戶月增減", cell(tdccOf(r.c)[1], 2, true)],
     ];
     return `<div class="scard" data-c="${r.c}" role="button" tabindex="0">
       <div class="scard-top">
@@ -767,17 +777,19 @@
 
   // ---------------------------------------------------------------- 啟動
   (async function init() {
-    const [meta, market, rows, tags, movers, history] = await Promise.all([
+    const [meta, market, rows, tags, movers, history, tdcc] = await Promise.all([
       getJSON("data/meta.json", null),
       getJSON("data/market.json", null),
       getJSON("data/latest.json", []),
       getJSON("data/tags.json", {}),
       getJSON("data/movers.json", null),
       getJSON("data/market_history.json", null),
+      getJSON("data/tdcc.json", null),
     ]);
     state.meta = meta; state.market = market;
     state.rows = rows || []; state.tags = tags || {}; state.movers = movers;
     state.history = history;
+    if (tdcc && tdcc.d) state.tdcc = tdcc;
 
     // 更新時間在窄螢幕以 CSS 隱藏，只留資料日期，避免頂欄被截斷
     $("asof").innerHTML = meta && meta.asOf
@@ -791,6 +803,15 @@
 
     const cov = $("tagCoverage");
     if (cov) cov.textContent = String(Object.keys(state.tags).length);
+
+    const tn = $("tdccNote");
+    if (tn) {
+      tn.textContent = state.tdcc.date
+        ? (state.tdcc.base
+            ? `目前為 ${state.tdcc.date} 那一週，月增減是與 ${state.tdcc.base} 相比。`
+            : `目前為 ${state.tdcc.date} 那一週；月增減要再累積約四週才會有數字。`)
+        : "尚未抓取。";
+    }
 
     const inds = [...new Set(state.rows.map((r) => r.i).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-Hant"));
     $("industry").innerHTML = '<option value="">所有產業</option>' + inds.map((i) => `<option>${esc(i)}</option>`).join("");
