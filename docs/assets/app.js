@@ -33,7 +33,9 @@
 
   const state = {
     rows: [], view: [], meta: null, market: null, tags: {}, movers: null, history: null,
-    sortKey: "cap", sortDir: -1, filterMarket: "", industry: "", tag: "", q: "",
+    // sorts: [{k, dir}]，最多 3 個，陣列順序就是優先序（索引 0 最優先）
+    // 空陣列代表沒設任何條件，套用 DEFAULT_SORTS
+    sorts: [], filterMarket: "", industry: "", tag: "", q: "",
     shown: 200, period: "d1", moverMarket: "listed",
   };
 
@@ -355,53 +357,125 @@
   // 手機排序選單只放有意義的數值欄位
   const SORTABLE = ["cap", "p", "pe", "ps", "pb", "dy", "rev_yoy", "rev_cum", "net_yoy", "eps"];
 
+  // ------------------------------------------------------------ 多欄排序
+  const DEFAULT_SORTS = [{ k: "cap", dir: -1 }];   // 沒設條件時：市值由大到小
+  const MAX_SORTS = 3;
+  // 文字欄位第一次點由小到大比較直覺；數值欄位習慣先看大的
+  const FIRST_DIR = { c: 1, n: 1, i: 1 };
+  const firstDir = (k) => FIRST_DIR[k] || -1;
+  const activeSorts = () => (state.sorts.length ? state.sorts : DEFAULT_SORTS);
+
   const valueOf = (r, k) => {
     const col = COLS.find((c) => c.k === k);
     const v = col && col.val ? col.val(r) : r[k];
     return v === undefined ? null : v;
   };
 
-  function renderHead() {
-    $("thead").innerHTML = COLS.map(
-      (c) => `<th data-k="${c.k}" aria-sort="${state.sortKey === c.k ? (state.sortDir > 0 ? "ascending" : "descending") : "none"}">${c.t}</th>`
-    ).join("");
-    $("thead").querySelectorAll("th").forEach((th) =>
+  const HEAD_HINT = `點一次由大到小、再點一次由小到大、第三次移除；最多同時 ${MAX_SORTS} 欄，數字越小越優先`;
+
+  function thHtml(c) {
+    const i = state.sorts.findIndex((s) => s.k === c.k);
+    const s = i >= 0 ? state.sorts[i] : null;
+    const aria = s ? (s.dir > 0 ? "ascending" : "descending") : "none";
+    const ind = s
+      ? `<span class="sort-ind" aria-hidden="true">${s.dir > 0 ? "↑" : "↓"}<b>${i + 1}</b></span>`
+      : "";
+    return `<th data-k="${c.k}" aria-sort="${aria}" title="${HEAD_HINT}">${c.t}${ind}</th>`;
+  }
+
+  /** 只重畫表頭（排序條件變動時呼叫），innerHTML 會換掉節點所以事件要重綁 */
+  function paintHead() {
+    const thead = $("thead");
+    thead.innerHTML = COLS.map(thHtml).join("");
+    thead.querySelectorAll("th").forEach((th) =>
       th.addEventListener("click", () => sortBy(th.dataset.k))
     );
+  }
+
+  function renderHead() {
+    paintHead();
 
     const sel = $("sortMobile");
     sel.innerHTML = SORTABLE.map((k) => {
       const c = COLS.find((x) => x.k === k);
       return `<option value="${k}">${c.t}　由大到小</option><option value="${k}:asc">${c.t}　由小到大</option>`;
     }).join("");
-    sel.value = state.sortKey;
+    sel.value = DEFAULT_SORTS[0].k;
+    // 手機的下拉選單維持單欄排序：選了就取代掉整組條件
     sel.addEventListener("change", (e) => {
       const [k, dir] = e.target.value.split(":");
-      state.sortKey = k;
-      state.sortDir = dir === "asc" ? 1 : -1;
+      state.sorts = [{ k, dir: dir === "asc" ? 1 : -1 }];
       state.shown = 200;
       applyFilters();
       syncSortUI();
     });
   }
 
+  /**
+   * 點欄位標題：第一次加入條件、第二次反向、第三次移除。
+   * 條件可以同時存在最多 MAX_SORTS 個，箭頭旁的數字就是優先序。
+   */
   function sortBy(k) {
-    if (state.sortKey === k) state.sortDir *= -1;
-    else { state.sortKey = k; state.sortDir = -1; }
+    if (!COLS.some((c) => c.k === k)) return;
+    const i = state.sorts.findIndex((s) => s.k === k);
+    if (i >= 0) {
+      const s = state.sorts[i];
+      if (s.dir === firstDir(k)) s.dir = -firstDir(k);   // 第二次：反向
+      else state.sorts.splice(i, 1);                     // 第三次：移除
+    } else {
+      if (state.sorts.length >= MAX_SORTS) { toast(`最多同時排序 ${MAX_SORTS} 欄，請先取消一個`); return; }
+      state.sorts.push({ k, dir: firstDir(k) });
+    }
+    state.shown = 200;
+    applyFilters();
+    syncSortUI();
+  }
+
+  /** 還原成預設排序（市值由大到小） */
+  function resetSort() {
+    if (!state.sorts.length) return;
+    state.sorts = [];
     state.shown = 200;
     applyFilters();
     syncSortUI();
   }
 
   function syncSortUI() {
-    $("thead").querySelectorAll("th").forEach((th) =>
-      th.setAttribute("aria-sort",
-        state.sortKey === th.dataset.k ? (state.sortDir > 0 ? "ascending" : "descending") : "none")
-    );
+    paintHead();
     const sel = $("sortMobile");
-    const want = state.sortDir > 0 ? `${state.sortKey}:asc` : state.sortKey;
-    if (SORTABLE.includes(state.sortKey)) sel.value = want;
+    const primary = activeSorts()[0];
+    if (SORTABLE.includes(primary.k)) {
+      sel.value = primary.dir > 0 ? `${primary.k}:asc` : primary.k;
+    }
   }
+
+  let toastTimer = null;
+  function toast(msg) {
+    let el = document.querySelector(".toast");
+    if (!el) {
+      el = document.createElement("div");
+      el.className = "toast";
+      el.setAttribute("role", "status");
+      document.body.appendChild(el);
+    }
+    el.textContent = msg;
+    el.classList.add("is-on");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove("is-on"), 2000);
+  }
+
+  // 點到頁面「真正的空白處」才還原預設排序；點表格、控制項、卡片都不算
+  const KEEP_SORT = "#tbl, #sortMobile, a, button, input, select, textarea, label," +
+    " [role='button'], [role='group'], dialog, .modal, .sheet, .card, .tile," +
+    " .stock-cards, .rank, details, summary, .toast";
+  // 用捕獲階段判斷：等到冒泡才判斷的話，表格早就重繪了，e.target 已經脫離 DOM，
+  // closest() 會一律回傳 null，變成點表頭也被當成「點空白處」。
+  document.addEventListener("click", (e) => {
+    if (!state.sorts.length) return;
+    const t = e.target;
+    if (t instanceof Element && (t.closest(KEEP_SORT) || !t.isConnected)) return;
+    resetSort();
+  }, true);
 
   function applyFilters() {
     const q = state.q.trim().toLowerCase();
@@ -414,15 +488,20 @@
                  || tagsOf(r.c).some((t) => t.toLowerCase().includes(q)))) return false;
       return true;
     });
-    const k = state.sortKey, dir = state.sortDir;
+    // 依序比對每個排序條件，先分出勝負的那個決定順序
+    const sorts = activeSorts();
     v.sort((a, b) => {
-      const x = valueOf(a, k), y = valueOf(b, k);
-      if (x == null && y == null) return 0;
-      if (x == null) return 1;          // 無資料一律排最後
-      if (y == null) return -1;
-      if (typeof x === "string" || typeof y === "string")
-        return String(x).localeCompare(String(y), "zh-Hant") * dir;
-      return (x - y) * dir;
+      for (const s of sorts) {
+        const x = valueOf(a, s.k), y = valueOf(b, s.k);
+        if (x == null && y == null) continue;
+        if (x == null) return 1;        // 無資料一律排最後
+        if (y == null) return -1;
+        const d = (typeof x === "string" || typeof y === "string")
+          ? String(x).localeCompare(String(y), "zh-Hant") * s.dir
+          : (x - y) * s.dir;
+        if (d) return d;
+      }
+      return 0;
     });
     state.view = v;
     renderBody();
