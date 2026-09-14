@@ -1,11 +1,16 @@
 name: 每日更新
 
-# 台股交易日收盤後更新。台北 UTC+8，收盤 13:30、盤後資料約 15:00 齊備。
-# cron 用 UTC。兩個時段：台北 15:23（UTC 07:23）與 19:23（UTC 11:23）。
+# 台北交易日分批補抓；來源公布時間不一，首輪不代表三市場資料已齊。
+# 13:37 首抓、14:37 盤後定價後、15:07 補抓、16:37 興櫃盤後統計、19:23 備援。
+# GitHub 排程與資料來源皆可能延遲；避開 :00 / :30。
 on:
   schedule:
-        - cron: "23 7 * * 1-5"
-        - cron: "23 11 * * 1-5"
+    - cron: "37 13,14,16 * * 1-5"
+      timezone: "Asia/Taipei"
+    - cron: "7 15 * * 1-5"
+      timezone: "Asia/Taipei"
+    - cron: "23 19 * * 1-5"
+      timezone: "Asia/Taipei"
   workflow_dispatch:
 
 permissions:
