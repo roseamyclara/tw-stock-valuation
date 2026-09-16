@@ -1,28 +1,28 @@
 {
- "asOf": "2026-09-15",
- "updatedAt": "2026-09-15T23:39:52",
+ "asOf": "2026-09-16",
+ "updatedAt": "2026-09-16T18:15:48",
  "counts": {
   "listed": 1088,
-  "otc": 891,
+  "otc": 892,
   "esb": 363
  },
- "total": 2342,
+ "total": 2343,
  "sources": {
   "listed_daily": 1080,
   "listed_profile": 1094,
-  "listed_revenue": 1074,
+  "listed_revenue": 1081,
   "listed_income": 1079,
-  "otc_quotes": 11358,
-  "otc_profile": 891,
-  "otc_pe": 886,
-  "otc_revenue": 891,
-  "otc_income": 893,
+  "otc_quotes": 11415,
+  "otc_profile": 892,
+  "otc_pe": 887,
+  "otc_revenue": 892,
+  "otc_income": 894,
   "esb_quotes": 363,
   "esb_profile": 363,
-  "esb_revenue": 362
+  "esb_revenue": 363
  },
- "withPE": 1541,
- "withPS": 2293,
- "withRevenue": 2326,
- "withFinancials": 1969
+ "withPE": 1542,
+ "withPS": 2296,
+ "withRevenue": 2335,
+ "withFinancials": 1970
 }

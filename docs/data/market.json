@@ -1,36 +1,36 @@
 {
- "asOf": "2026-09-15",
+ "asOf": "2026-09-16",
  "markets": {
   "listed": {
    "label": "上市",
    "count": 1088,
-   "cap": 147826109484033,
-   "pe": 16.97,
-   "ps": 1.68,
-   "peWeighted": 24.73,
-   "psWeighted": 2.74,
+   "cap": 148967671451136,
+   "pe": 17.05,
+   "ps": 1.7,
+   "peWeighted": 24.93,
+   "psWeighted": 2.72,
    "withPE": 869,
-   "withPS": 1065
+   "withPS": 1067
   },
   "otc": {
    "label": "上櫃",
-   "count": 891,
-   "cap": 10609078742452,
-   "pe": 18.89,
-   "ps": 2.13,
-   "peWeighted": 24.55,
-   "psWeighted": 3.02,
-   "withPE": 672,
-   "withPS": 886
+   "count": 892,
+   "cap": 10889287253801,
+   "pe": 19.04,
+   "ps": 2.15,
+   "peWeighted": 25.18,
+   "psWeighted": 3.1,
+   "withPE": 673,
+   "withPS": 887
   },
   "esb": {
    "label": "興櫃",
    "count": 363,
-   "cap": 1820356570453,
+   "cap": 1881263981868,
    "pe": null,
-   "ps": 2.84,
+   "ps": 2.88,
    "peWeighted": null,
-   "psWeighted": 4.19,
+   "psWeighted": 4.01,
    "withPE": 0,
    "withPS": 342
   }
