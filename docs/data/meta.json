@@ -1,6 +1,6 @@
 {
- "asOf": "2026-09-17",
- "updatedAt": "2026-09-17T23:35:20",
+ "asOf": "2026-09-18",
+ "updatedAt": "2026-09-18T18:04:32",
  "counts": {
   "listed": 1088,
   "otc": 892,
@@ -12,7 +12,7 @@
   "listed_profile": 1094,
   "listed_revenue": 1086,
   "listed_income": 1079,
-  "otc_quotes": 11479,
+  "otc_quotes": 11481,
   "otc_profile": 892,
   "otc_pe": 887,
   "otc_revenue": 892,
