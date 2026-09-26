@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#08080c" media="(prefers-color-scheme: dark)">
 <title>資料工作表</title>
 <meta name="description" content="台灣股市上市、上櫃、興櫃三個板塊的本益比、股價營收比、月營收年增率與獲利成長率，資料取自證交所與櫃買中心官方開放資料，每交易日自動更新。">
-<link rel="stylesheet" href="assets/style.css?v=20260926-worksheet-v1">
+<link rel="stylesheet" href="assets/style.css?v=20260926-modes-v1">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='2' y='2' width='12' height='12' rx='1' fill='%236b7280'/><path d='M3 6h10M3 10h10M7 3v10' stroke='white'/></svg>">
 </head>
 <body class="work-sheet">
@@ -21,6 +21,10 @@
       <span class="brand-txt">資料工作表</span>
     </a>
     <span class="asof" id="asof">載入中…</span>
+    <div class="display-modes" role="group" aria-label="顯示模式">
+      <button type="button" data-display-mode="work" aria-pressed="true">上班</button>
+      <button type="button" data-display-mode="off" aria-pressed="false">下班</button>
+    </div>
     <button class="icon-btn" id="themeToggle" type="button" aria-label="切換深淺色"></button>
   </div>
 </header>
@@ -172,6 +176,6 @@
   <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 16V5m0 0L5 10m5-5 5 5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
 </button>
 
-<script src="assets/app.js?v=20260926-worksheet-v1"></script>
+<script src="assets/app.js?v=20260926-modes-v1"></script>
 </body>
 </html>
