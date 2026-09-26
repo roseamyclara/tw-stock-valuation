@@ -36,6 +36,13 @@ class PerformanceTest(unittest.TestCase):
     def test_null_and_zero(self):
         x=calculate({'dates':['2025-03-10'],'p':{'1234':[0]}},{},[{'c':'1234','m':'esb'}])['stocks']['1234']
         self.assertTrue(all(v is None for v in x['returns'].values()))
+    def test_one_day_weekend_and_missing_previous_quote(self):
+        p={'dates':['2025-03-06','2025-03-07','2025-03-10'],
+           'p':{'1234':[90,100,110], '5678':[90,None,110]}}
+        x=calculate(p,{},[{'c':c,'m':'listed'} for c in p['p']])['stocks']
+        self.assertEqual(x['1234']['returns']['d1'],10)
+        self.assertEqual(x['1234']['bases']['d1'],'2025-03-07')
+        self.assertIsNone(x['5678']['returns']['d1'])
     def test_field_mapping(self):
         p={'tables':[{'fields':['證券代號','最高價','收盤價','最低價'],'data':[['1234','120','100','80'],['0050','12','10','8']]}]}
         self.assertEqual(parse(p,'listed'),{'1234':[100,120,80],'0050':[10,12,8]})

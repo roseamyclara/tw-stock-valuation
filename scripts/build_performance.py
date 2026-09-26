@@ -12,7 +12,7 @@ def shift_months(day, months):
 
 
 def targets(day):
-    return {'y5': shift_months(day, -60), 'y1': shift_months(day, -12),
+    return {'d1': day - timedelta(days=1), 'y5': shift_months(day, -60), 'y1': shift_months(day, -12),
             'ytd': date(day.year, 1, 1) - timedelta(days=1),
             'm3': shift_months(day, -3), 'm1': shift_months(day, -1),
             'w1': day - timedelta(days=7)}
@@ -28,6 +28,12 @@ def calculate(prices, candles, rows):
         return {'asOf': None, 'stocks': {}}
     asof = date.fromisoformat(dates[-1]); cut = asof - timedelta(weeks=52)
     bases = targets(asof)
+    # 一日以全市場前一個有行情的交易日比較；停牌缺報價不能退回更早日期。
+    trading_days = set(d for d in dates if d < asof.isoformat())
+    trading_days.update(d for d, markets in candles.items()
+                        if d < asof.isoformat() and any(markets.values()))
+    if trading_days:
+        bases['d1'] = date.fromisoformat(max(trading_days))
     output = {'asOf': asof.isoformat(), 'basis': 'unadjusted-price',
               'targets': {k: v.isoformat() for k, v in bases.items()}, 'stocks': {}}
     # official candles: {date: {market: {code: [close, high, low]}}}
@@ -48,7 +54,8 @@ def calculate(prices, candles, rows):
         for key, target in bases.items():
             # Holiday/weekend: nearest preceding observed close, never a later price.
             eligible = [(d, v[0]) for d, v in history.items()
-                        if (target - timedelta(days=14)).isoformat() <= d <= target.isoformat() and positive(v[0])]
+                        if (target - timedelta(days=14)).isoformat() <= d <= target.isoformat() and positive(v[0])
+                        and (key != 'd1' or d == target.isoformat())]
             base = max(eligible, default=None)
             item['returns'][key] = round((current / base[1] - 1) * 100, 2) if positive(current) and base else None
             item['bases'][key] = base[0] if base else None
