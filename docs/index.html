@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#08080c" media="(prefers-color-scheme: dark)">
 <title>資料工作表</title>
 <meta name="description" content="台灣股市上市、上櫃、興櫃三個板塊的本益比、股價營收比、月營收年增率與獲利成長率，資料取自證交所與櫃買中心官方開放資料，每交易日自動更新。">
-<link rel="stylesheet" href="assets/style.css?v=20260926-modes-v1">
+<link rel="stylesheet" href="assets/style.css?v=20260927-design-v1">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='2' y='2' width='12' height='12' rx='1' fill='%236b7280'/><path d='M3 6h10M3 10h10M7 3v10' stroke='white'/></svg>">
 </head>
 <body class="work-sheet">
@@ -31,7 +31,17 @@
 
 <div class="wrap" id="top">
 
-  <section class="worksheet-heading"><h1>資料工作表</h1><p>每日資料 · 篩選與比較</p></section>
+  <section class="worksheet-heading">
+    <span class="hero-eyebrow">TAIWAN EQUITY / DAILY OBSERVATORY</span>
+    <h1>資料工作表</h1><p>每日資料 · 篩選與比較</p>
+    <div class="hero-links"><a href="#stocks">探索個股 <span aria-hidden="true">↗</span></a><a href="#moversSection">查看市場動向 <span aria-hidden="true">↓</span></a></div>
+    <div class="hero-orbit" aria-hidden="true"><span>TW</span><small>EQUITY OBSERVATORY</small></div>
+  </section>
+  <nav class="sheet-toolbar" aria-label="工作表工具列">
+    <span class="sheet-file">▤ 每日資料</span><span class="sheet-divider"></span>
+    <button type="button" id="sheetSearch">搜尋</button><button type="button" id="sheetColumns">欄位</button>
+    <button type="button" id="sheetAnalysis">分析</button><span class="sheet-readonly">唯讀 · 點選資料列查看明細</span>
+  </nav>
 
   <!-- ============ 漲幅排行與族群 ============ -->
   <details class="section worksheet-analysis" id="moversSection">
@@ -145,6 +155,7 @@
       </div>
     </div>
     <!-- 桌機：表頭與固定欄位在同一個捲動容器內 -->
+    <div class="sheet-formula" aria-label="資料表說明"><span>A1</span><i aria-hidden="true">fx</i><span>每日資料 / 依目前篩選顯示</span></div>
     <div class="table-shell">
       <div class="table-scroll" tabindex="0" role="region" aria-label="個股指標表格，可上下左右捲動" aria-describedby="tableScrollHint">
         <table id="tbl">
@@ -153,6 +164,8 @@
         </table>
       </div>
     </div>
+
+    <nav class="sheet-tabs" aria-label="工作表分頁"><a href="#stocks" aria-current="page">資料表 ▾</a><button type="button" id="sheetAnalysisTab">排行分析</button></nav>
 
     <!-- 手機：卡片列表 -->
     <div class="stock-cards" id="cards"></div>
@@ -176,6 +189,6 @@
   <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 16V5m0 0L5 10m5-5 5 5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
 </button>
 
-<script src="assets/app.js?v=20260926-modes-v1"></script>
+<script src="assets/app.js?v=20260927-design-v1"></script>
 </body>
 </html>
