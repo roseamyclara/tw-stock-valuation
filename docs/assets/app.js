@@ -34,7 +34,7 @@
   const state = {
     rows: [], view: [], meta: null, market: null, tags: {}, movers: null, history: null,
     tdcc: { date: null, base: null, d: {} },
-    performance: { stocks: {} }, returnPeriod: "y1",
+    performance: { stocks: {} }, returnPeriod: "y1", columnView: "price",
     // sorts: [{k, dir}]，最多 3 個，陣列順序就是優先序（索引 0 最優先）
     // 空陣列代表沒設任何條件，套用 DEFAULT_SORTS
     sorts: [], filterMarket: "", industry: "", tag: "", q: "",
@@ -380,6 +380,14 @@
     { k: "big_chg", t: "月增減", sel: "大戶持股月增減", get: (r) => cell(tdccOf(r.c)[1], 2, true), val: (r) => tdccOf(r.c)[1] },
   ];
 
+  const COLUMN_VIEWS = {
+    price: ["c", "n", "i", "p", "priceReturn", "fromLow52", "fromHigh52", "cap"],
+    valuation: ["c", "n", "i", "p", "cap", "pe", "ps", "pb", "dy"],
+    growth: ["c", "n", "i", "p", "rev_yoy", "rev_cum", "net_yoy", "eps"],
+    ownership: ["c", "n", "i", "p", "cap", "big", "big_chg"],
+  };
+  const visibleCols = () => COLS.filter(c => state.columnView === "all" || COLUMN_VIEWS[state.columnView].includes(c.k));
+
   // 手機排序選單只放有意義的數值欄位
   const SORTABLE = ["priceReturn", "fromLow52", "fromHigh52", "cap", "p", "pe", "ps", "pb", "dy", "rev_yoy", "rev_cum", "net_yoy", "eps",
                     "big", "big_chg"];
@@ -417,7 +425,7 @@
   /** 只重畫表頭（排序條件變動時呼叫），innerHTML 會換掉節點所以事件要重綁 */
   function paintHead() {
     const thead = $("thead");
-    thead.innerHTML = COLS.map(thHtml).join("");
+    thead.innerHTML = visibleCols().map(thHtml).join("");
     bindReturnPeriod();
     thead.querySelectorAll("th").forEach((th) =>
       th.addEventListener("click", (e) => { if (!e.target.closest("select")) sortBy(th.dataset.k); })
@@ -518,26 +526,39 @@
     resetSort();
   }, true);
 
-  /**
-   * 寬螢幕預設 overflow-x: clip（不建立捲動容器，表頭的 sticky 才能相對視窗生效），
-   * 但塞不下卻用 clip 會把右邊的欄位直接裁掉又捲不到。所以這裡實測一次寬度：
-   * 真的溢出就退回可捲動，並在右緣點一道漸層提示還有欄位。
-   * 用量的不用猜的 —— 欄寬會隨業務標籤的長度變動，媒體查詢猜不準。
-   */
+  // 固定高度的表格捲動區；表頭與左右捲動共用同一個容器。
   const shell = document.querySelector(".table-shell");
   const scroller = document.querySelector(".table-scroll");
   function syncOverflowHint() {
-    if (!shell || !scroller) return;
-    const overflowing = scroller.scrollWidth - scroller.clientWidth > 1;
-    scroller.classList.toggle("is-scrollable", overflowing);
-    // 上一行可能改變 overflow-x，要在改完之後才讀
-    const clipped = getComputedStyle(scroller).overflowX === "clip";
-    shell.classList.toggle("has-more",
-      !clipped && overflowing && scroller.scrollWidth - scroller.clientWidth - scroller.scrollLeft > 2);
+    if (!shell || !scroller || !$("tableScrollHint")) return;
+    const max = scroller.scrollWidth - scroller.clientWidth;
+    const overflowing = max > 1;
+    shell.classList.toggle("has-more", overflowing && max - scroller.scrollLeft > 2);
+    $("tablePrev").disabled = !overflowing || scroller.scrollLeft < 2;
+    $("tableNext").disabled = !overflowing || max - scroller.scrollLeft < 2;
+    $("tableScrollHint").textContent = overflowing
+      ? "左右捲動查看其餘欄位；代號與名稱固定在左側"
+      : "上下捲動瀏覽股票；表頭固定在表格頂端";
   }
   if (scroller) {
     scroller.addEventListener("scroll", syncOverflowHint, { passive: true });
     window.addEventListener("resize", syncOverflowHint);
+    for (const [id, direction] of [["tablePrev", -1], ["tableNext", 1]]) {
+      $(id)?.addEventListener("click", () => scroller.scrollBy({
+        left: direction * Math.max(200, scroller.clientWidth - 248),
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      }));
+    }
+    $("columnView")?.addEventListener("change", e => {
+      state.columnView = e.target.value;
+      // 切換主題時不保留隱藏欄位的排序，避免看不到排序依據。
+      const keys = visibleCols().map(c => c.k);
+      state.sorts = state.sorts.filter(s => keys.includes(s.k));
+      paintHead();
+      applyFilters();
+      scroller.scrollLeft = 0;
+      syncOverflowHint();
+    });
   }
 
   function applyFilters() {
@@ -613,7 +634,7 @@
     const slice = state.view.slice(0, state.shown);
 
     $("tbody").innerHTML = slice
-      .map((r) => `<tr data-c="${r.c}">${COLS.map((c) => `<td class="${c.cls || ""}">${c.get(r) ?? '<span class="na">—</span>'}</td>`).join("")}</tr>`)
+      .map((r) => `<tr data-c="${r.c}">${visibleCols().map((c) => `<td class="${c.cls || ""}">${c.get(r) ?? '<span class="na">—</span>'}</td>`).join("")}</tr>`)
       .join("");
     $("cards").innerHTML = slice.map(stockCard).join("");
 
