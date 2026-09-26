@@ -138,8 +138,6 @@
     document.title = working ? "資料工作表" : "台股觀測站｜價格、產業與估值";
     document.querySelector(".brand-txt").textContent = working ? "資料工作表" : "台股觀測站";
     document.querySelector(".brand-mark").textContent = working ? "▤" : "TW";
-    document.querySelector(".worksheet-heading h1").textContent = working ? "資料工作表" : "台股觀測站";
-    document.querySelector(".worksheet-heading p").textContent = working ? "每日資料 · 篩選與比較" : "從價格到產業，找到值得追蹤的下一個訊號。";
     $("moversSection").open = !working;
   }
   let savedDisplayMode = "work";
