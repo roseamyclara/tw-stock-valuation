@@ -34,7 +34,7 @@
   const state = {
     rows: [], view: [], meta: null, market: null, tags: {}, movers: null, history: null,
     tdcc: { date: null, base: null, d: {} },
-    performance: { stocks: {} }, returnPeriod: "y1", columnView: "price",
+    performance: { stocks: {} }, returnPeriod: "d1", selectedColumns: ["p", "cap", "priceReturn", "pe", "ps"],
     // sorts: [{k, dir}]，最多 3 個，陣列順序就是優先序（索引 0 最優先）
     // 空陣列代表沒設任何條件，套用 DEFAULT_SORTS
     sorts: [], filterMarket: "", industry: "", tag: "", q: "",
@@ -43,7 +43,7 @@
 
   const tagsOf = (code) => state.tags[code] || [];
 
-  const RETURN_PERIODS = { y5: "五年", y1: "一年", ytd: "今年迄今", m3: "三個月", m1: "一個月", w1: "一週" };
+  const RETURN_PERIODS = { d1: "一日", y5: "五年", y1: "一年", ytd: "今年迄今", m3: "三個月", m1: "一個月", w1: "一週" };
   const performanceOf = (code) => state.performance.stocks[code] || {};
   const returnOf = (code) => (performanceOf(code).returns || {})[state.returnPeriod] ?? null;
   const periodOptions = () => Object.entries(RETURN_PERIODS).map(([k, t]) =>
@@ -380,13 +380,84 @@
     { k: "big_chg", t: "月增減", sel: "大戶持股月增減", get: (r) => cell(tdccOf(r.c)[1], 2, true), val: (r) => tdccOf(r.c)[1] },
   ];
 
-  const COLUMN_VIEWS = {
-    price: ["c", "n", "i", "p", "priceReturn", "fromLow52", "fromHigh52", "cap"],
-    valuation: ["c", "n", "i", "p", "cap", "pe", "ps", "pb", "dy"],
-    growth: ["c", "n", "i", "p", "rev_yoy", "rev_cum", "net_yoy", "eps"],
-    ownership: ["c", "n", "i", "p", "cap", "big", "big_chg"],
-  };
-  const visibleCols = () => COLS.filter(c => state.columnView === "all" || COLUMN_VIEWS[state.columnView].includes(c.k));
+  const FIXED_COLUMNS = ["c", "n", "i"];
+  const visibleCols = () => [...FIXED_COLUMNS, ...state.selectedColumns].map(k => COLS.find(c => c.k === k));
+  const columnLabel = c => c.k === "priceReturn" ? "漲跌幅（可選期間）" : (c.sel || c.t);
+  let draggedColumn = null;
+
+  function changeColumn(key, before = null, remove = false) {
+    if (FIXED_COLUMNS.includes(key) || !COLS.some(c => c.k === key)) return;
+    if (key === before) return;
+    const next = state.selectedColumns.filter(k => k !== key);
+    if (!remove) {
+      const at = next.indexOf(before);
+      next.splice(at < 0 ? next.length : at, 0, key);
+    }
+    state.selectedColumns = next;
+    state.sorts = state.sorts.filter(s => FIXED_COLUMNS.includes(s.k) || next.includes(s.k));
+    paintHead();
+    renderColumnPicker();
+    applyFilters();
+    $("columnStatus").textContent = `${columnLabel(COLS.find(c => c.k === key))}已${remove ? "移回可選欄位" : "放入表格"}`;
+  }
+
+  function bindColumnDrag(el, key) {
+    el.addEventListener("dragstart", e => {
+      draggedColumn = key;
+      e.dataTransfer.setData("text/plain", key);
+      e.dataTransfer.effectAllowed = "move";
+      document.querySelector(".column-picker")?.classList.add("is-dragging");
+    });
+    el.addEventListener("dragend", () => {
+      draggedColumn = null;
+      document.querySelector(".column-picker")?.classList.remove("is-dragging");
+      document.querySelectorAll(".drop-active").forEach(n => n.classList.remove("drop-active"));
+    });
+  }
+
+  function bindColumnDrop(el, remove = false, before = null) {
+    if (!el) return;
+    el.addEventListener("dragover", e => {
+      if (!draggedColumn) return;
+      e.preventDefault(); e.stopPropagation();
+      e.dataTransfer.dropEffect = "move";
+      el.classList.add("drop-active");
+    });
+    el.addEventListener("dragleave", e => {
+      if (!el.contains(e.relatedTarget)) el.classList.remove("drop-active");
+    });
+    el.addEventListener("drop", e => {
+      if (!draggedColumn) return;
+      e.preventDefault(); e.stopPropagation();
+      const key = draggedColumn;
+      draggedColumn = null;
+      document.querySelectorAll(".drop-active, .is-dragging").forEach(n => n.classList.remove("drop-active", "is-dragging"));
+      changeColumn(key, before, remove);
+    });
+  }
+
+  function renderColumnPicker() {
+    const pool = $("columnPool"), selected = $("selectedColumns");
+    if (!pool || !selected) return;
+    const available = COLS.filter(c => !FIXED_COLUMNS.includes(c.k) && !state.selectedColumns.includes(c.k));
+    pool.innerHTML = available.map(c => `<button type="button" class="column-chip" draggable="true" data-column="${c.k}" aria-label="加入${columnLabel(c)}">＋ ${columnLabel(c)}</button>`).join("") || '<span class="column-empty">所有欄位都已加入；拖曳表頭到此處即可移除</span>';
+    selected.innerHTML = state.selectedColumns.map(k => {
+      const c = COLS.find(c => c.k === k);
+      return `<button type="button" class="column-chip is-selected" draggable="true" data-column="${k}" aria-label="移除${columnLabel(c)}">⠿ ${columnLabel(c)} <span aria-hidden="true">×</span></button>`;
+    }).join("") || '<span class="column-empty">拖曳上方方塊到這裡，或點方塊加入指標</span>';
+    for (const [zone, remove] of [[pool, true], [selected, false]]) {
+      zone.querySelectorAll("[data-column]").forEach(el => {
+        const key = el.dataset.column;
+        bindColumnDrag(el, key);
+        el.addEventListener("click", () => {
+          changeColumn(key, null, zone === selected);
+          const target = document.querySelector(`#${zone === selected ? "columnPool" : "selectedColumns"} [data-column="${key}"]`);
+          target?.focus();
+        });
+        if (!remove) bindColumnDrop(el, false, key);
+      });
+    }
+  }
 
   // 手機排序選單只放有意義的數值欄位
   const SORTABLE = ["priceReturn", "fromLow52", "fromHigh52", "cap", "p", "pe", "ps", "pb", "dy", "rev_yoy", "rev_cum", "net_yoy", "eps",
@@ -398,7 +469,7 @@
   // 文字欄位第一次點由小到大比較直覺；數值欄位習慣先看大的
   const FIRST_DIR = { c: 1, n: 1, i: 1 };
   const firstDir = (k) => FIRST_DIR[k] || -1;
-  const activeSorts = () => (state.sorts.length ? state.sorts : DEFAULT_SORTS);
+  const activeSorts = () => (state.sorts.length ? state.sorts : (state.selectedColumns.includes("cap") ? DEFAULT_SORTS : [{ k: "c", dir: 1 }]));
 
   const valueOf = (r, k) => {
     const col = COLS.find((c) => c.k === k);
@@ -415,11 +486,12 @@
     const ind = s
       ? `<span class="sort-ind" aria-hidden="true">${s.dir > 0 ? "↑" : "↓"}<b>${i + 1}</b></span>`
       : "";
+    const controls = FIXED_COLUMNS.includes(c.k) ? "" : `<span class="column-actions"><button type="button" class="column-grip" draggable="true" aria-label="拖曳${columnLabel(c)}" title="拖曳調整順序，或拖回上方可選欄位">⠿</button><button type="button" class="column-remove" aria-label="移除${columnLabel(c)}" title="移回上方可選欄位">×</button></span>`;
     const tip = c.sel ? `${c.sel}｜${HEAD_HINT}` : HEAD_HINT;
     if (c.k === "priceReturn") return `<th data-k="${c.k}" aria-sort="${aria}" title="${HEAD_HINT}">
       <button type="button" class="return-sort" aria-label="排序漲跌幅">${c.t}${ind}</button>
-      <select class="return-period" aria-label="選擇漲跌幅期間">${periodOptions()}</select></th>`;
-    return `<th data-k="${c.k}" aria-sort="${aria}" title="${tip}">${c.t}${ind}</th>`;
+      <select class="return-period" aria-label="選擇漲跌幅期間">${periodOptions()}</select>${controls}</th>`;
+    return `<th data-k="${c.k}" aria-sort="${aria}" title="${tip}">${c.t}${ind}${controls}</th>`;
   }
 
   /** 只重畫表頭（排序條件變動時呼叫），innerHTML 會換掉節點所以事件要重綁 */
@@ -427,9 +499,17 @@
     const thead = $("thead");
     thead.innerHTML = visibleCols().map(thHtml).join("");
     bindReturnPeriod();
-    thead.querySelectorAll("th").forEach((th) =>
-      th.addEventListener("click", (e) => { if (!e.target.closest("select")) sortBy(th.dataset.k); })
-    );
+    thead.querySelectorAll("th").forEach(th => {
+      th.addEventListener("click", e => {
+        if (!e.target.closest("select, .column-actions")) sortBy(th.dataset.k);
+      });
+      const key = th.dataset.k;
+      if (!FIXED_COLUMNS.includes(key)) {
+        bindColumnDrag(th.querySelector(".column-grip"), key);
+        th.querySelector(".column-remove").addEventListener("click", () => changeColumn(key, null, true));
+        bindColumnDrop(th, false, key);
+      }
+    });
   }
 
   function bindReturnPeriod() {
@@ -549,17 +629,11 @@
         behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
       }));
     }
-    $("columnView")?.addEventListener("change", e => {
-      state.columnView = e.target.value;
-      // 切換主題時不保留隱藏欄位的排序，避免看不到排序依據。
-      const keys = visibleCols().map(c => c.k);
-      state.sorts = state.sorts.filter(s => keys.includes(s.k));
-      paintHead();
-      applyFilters();
-      scroller.scrollLeft = 0;
-      syncOverflowHint();
-    });
   }
+  bindColumnDrop($("columnPool"), true);
+  bindColumnDrop($("selectedColumns"));
+  bindColumnDrop(scroller);
+
 
   function applyFilters() {
     const q = state.q.trim().toLowerCase();
@@ -597,21 +671,8 @@
     const tags = ts.length
       ? ts.slice(0, 4).map((t) => `<button type="button" class="tag${state.tag === t ? " is-active" : ""}" data-tag="${esc(t)}">${esc(t)}</button>`).join("")
       : (r.i ? `<button type="button" class="tag ind-tag${state.industry === r.i ? " is-active" : ""}" data-ind="${esc(r.i)}">${esc(r.i)}</button>` : "");
-    const metrics = [
-      [RETURN_PERIODS[state.returnPeriod] + "漲跌幅%", cell(returnOf(r.c), 2, true)],
-      ["距52週低點%", cell(performanceOf(r.c).fromLow52, 2, true)],
-      ["距52週高點%", cell(performanceOf(r.c).fromHigh52, 2, true)],
-      ["本益比", cell(r.pe)],
-      ["股價營收比", r.ps == null ? '<span class="na">—</span>' : cell(r.ps) + (r.ps_basis === "估算" ? '<span class="est">估</span>' : "")],
-      ["淨值比", cell(r.pb)],
-      ["殖利率%", cell(r.dy)],
-      ["月營收年增%", cell(r.rev && r.rev.yoy, 1, true)],
-      ["累計年增%", cell(r.rev && r.rev.cum_yoy, 1, true)],
-      ["淨利年增%", cell(r.fin && r.fin.net_yoy, 1, true)],
-      ["EPS", cell(r.fin && r.fin.eps)],
-      ["400張以上%", cell(tdccOf(r.c)[0])],
-      ["大戶月增減", cell(tdccOf(r.c)[1], 2, true)],
-    ];
+    const metrics = visibleCols().filter(c => !["c", "n", "i", "p", "cap"].includes(c.k))
+      .map(c => [c.k === "priceReturn" ? RETURN_PERIODS[state.returnPeriod] + "漲跌幅%" : (c.sel || c.t), c.get(r)]);
     return `<div class="scard" data-c="${r.c}" role="button" tabindex="0">
       <div class="scard-top">
         <div class="scard-id">
@@ -619,8 +680,8 @@
           <div class="scard-code">${r.c}</div>
         </div>
         <div class="scard-price">
-          <div class="p">${fmt(r.p) ?? "—"}</div>
-          <div class="cap">市值 ${human(r.cap) ?? "—"}</div>
+          ${state.selectedColumns.includes("p") ? `<div class="p">${fmt(r.p) ?? "—"}</div>` : ""}
+          ${state.selectedColumns.includes("cap") ? `<div class="cap">市值 ${human(r.cap) ?? "—"}</div>` : ""}
         </div>
       </div>
       ${tags ? `<div class="scard-tags">${tags}</div>` : ""}
@@ -905,6 +966,7 @@
     $("industry").innerHTML = '<option value="">所有產業</option>' + inds.map((i) => `<option>${esc(i)}</option>`).join("");
 
     renderHead();
+    renderColumnPicker();
     renderHeroStats();
     draw();
     applyFilters();

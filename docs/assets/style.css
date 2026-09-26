@@ -1240,3 +1240,23 @@ footer a:hover { color: var(--accent); border-bottom-color: var(--accent); }
 }
 
 #tbl .return-period { margin-left: auto; }
+
+/* 欄位方塊：桌機可拖曳，手機及鍵盤可點選加入／移除。 */
+.column-picker { margin: 16px 0; padding: 16px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-1); }
+.column-picker-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; font-size: 13px; }
+.column-picker-heading span { color: var(--muted); font-size: 12px; }
+.column-zone { display: flex; flex-wrap: wrap; gap: 8px; min-height: 56px; padding: 10px; margin: 8px 0 16px; border: 1px dashed var(--border); border-radius: 10px; }
+.selected-zone { margin-bottom: 0; background: var(--surface-2); }
+.column-chip { display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; min-height: 38px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-1); color: var(--text-primary); font: inherit; font-size: 13px; cursor: grab; }
+.column-chip:active, .column-grip:active { cursor: grabbing; }
+.column-chip:hover { border-color: var(--accent); background: var(--accent-soft); }
+.column-chip.is-selected { border-color: var(--accent); }
+.column-empty { align-self: center; font-size: 12px; color: var(--muted); }
+.column-actions { display: flex; justify-content: flex-end; gap: 4px; margin-top: 5px; }
+.column-actions button { min-width: 24px; height: 24px; border: 1px solid var(--border); border-radius: 5px; color: var(--muted); background: var(--surface-1); font-size: 16px; cursor: pointer; }
+.column-actions .column-grip { cursor: grab; }
+.column-actions button:hover { color: var(--accent); border-color: var(--accent); }
+.drop-active { outline: 2px dashed var(--accent); outline-offset: -3px; background: var(--accent-soft) !important; }
+.column-picker.is-dragging #columnPool { border-color: var(--accent); }
+.column-chip:focus-visible, .column-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 860px) { .column-picker { padding: 12px; } .column-chip { min-height: 44px; } }
