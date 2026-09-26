@@ -34,6 +34,7 @@
   const state = {
     rows: [], view: [], meta: null, market: null, tags: {}, movers: null, history: null,
     tdcc: { date: null, base: null, d: {} },
+    performance: { stocks: {} }, returnPeriod: "y1",
     // sorts: [{k, dir}]，最多 3 個，陣列順序就是優先序（索引 0 最優先）
     // 空陣列代表沒設任何條件，套用 DEFAULT_SORTS
     sorts: [], filterMarket: "", industry: "", tag: "", q: "",
@@ -41,6 +42,21 @@
   };
 
   const tagsOf = (code) => state.tags[code] || [];
+
+  const RETURN_PERIODS = { y5: "五年", y1: "一年", ytd: "今年迄今", m3: "三個月", m1: "一個月", w1: "一週" };
+  const performanceOf = (code) => state.performance.stocks[code] || {};
+  const returnOf = (code) => (performanceOf(code).returns || {})[state.returnPeriod] ?? null;
+  const periodOptions = () => Object.entries(RETURN_PERIODS).map(([k, t]) =>
+    `<option value="${k}"${state.returnPeriod === k ? " selected" : ""}>${t}</option>`).join("");
+  function changeReturnPeriod(value) {
+    if (!Object.hasOwn(RETURN_PERIODS, value)) return;
+    state.returnPeriod = value;
+    state.shown = 200;
+    applyFilters();
+    paintHead();
+    const mobile = $("returnPeriodMobile");
+    if (mobile) mobile.value = value;
+  }
 
   // 集保「400 張以上」大股東：[占集保庫存比例%, 與四週前的差(百分點)]
   const tdccOf = (code) => state.tdcc.d[code] || [null, null];
@@ -347,6 +363,9 @@
       },
     },
     { k: "p", t: "股價", get: (r) => cell(r.p) },
+    { k: "priceReturn", t: "漲跌幅%", get: (r) => cell(returnOf(r.c), 2, true), val: (r) => returnOf(r.c) },
+    { k: "fromLow52", t: "距52週低點%", get: (r) => cell(performanceOf(r.c).fromLow52, 2, true), val: (r) => performanceOf(r.c).fromLow52 },
+    { k: "fromHigh52", t: "距52週高點%", get: (r) => cell(performanceOf(r.c).fromHigh52, 2, true), val: (r) => performanceOf(r.c).fromHigh52 },
     { k: "cap", t: "市值", get: (r) => human(r.cap) ?? '<span class="na">—</span>' },
     { k: "pe", t: "本益比", get: (r) => cell(r.pe) },
     { k: "ps", t: "股價營收比", get: (r) => (r.ps == null ? '<span class="na">—</span>' : cell(r.ps) + (r.ps_basis === "估算" ? '<span class="est">估</span>' : "")) },
@@ -362,7 +381,7 @@
   ];
 
   // 手機排序選單只放有意義的數值欄位
-  const SORTABLE = ["cap", "p", "pe", "ps", "pb", "dy", "rev_yoy", "rev_cum", "net_yoy", "eps",
+  const SORTABLE = ["priceReturn", "fromLow52", "fromHigh52", "cap", "p", "pe", "ps", "pb", "dy", "rev_yoy", "rev_cum", "net_yoy", "eps",
                     "big", "big_chg"];
 
   // ------------------------------------------------------------ 多欄排序
@@ -389,6 +408,9 @@
       ? `<span class="sort-ind" aria-hidden="true">${s.dir > 0 ? "↑" : "↓"}<b>${i + 1}</b></span>`
       : "";
     const tip = c.sel ? `${c.sel}｜${HEAD_HINT}` : HEAD_HINT;
+    if (c.k === "priceReturn") return `<th data-k="${c.k}" aria-sort="${aria}" title="${HEAD_HINT}">
+      <button type="button" class="return-sort" aria-label="排序漲跌幅">${c.t}${ind}</button>
+      <select class="return-period" aria-label="選擇漲跌幅期間">${periodOptions()}</select></th>`;
     return `<th data-k="${c.k}" aria-sort="${aria}" title="${tip}">${c.t}${ind}</th>`;
   }
 
@@ -396,9 +418,18 @@
   function paintHead() {
     const thead = $("thead");
     thead.innerHTML = COLS.map(thHtml).join("");
+    bindReturnPeriod();
     thead.querySelectorAll("th").forEach((th) =>
-      th.addEventListener("click", () => sortBy(th.dataset.k))
+      th.addEventListener("click", (e) => { if (!e.target.closest("select")) sortBy(th.dataset.k); })
     );
+  }
+
+  function bindReturnPeriod() {
+    const select = $("thead").querySelector(".return-period");
+    if (select) select.addEventListener("change", (e) => {
+      changeReturnPeriod(e.target.value);
+      $("thead").querySelector(".return-period").focus();
+    });
   }
 
   function renderHead() {
@@ -546,6 +577,9 @@
       ? ts.slice(0, 4).map((t) => `<button type="button" class="tag${state.tag === t ? " is-active" : ""}" data-tag="${esc(t)}">${esc(t)}</button>`).join("")
       : (r.i ? `<button type="button" class="tag ind-tag${state.industry === r.i ? " is-active" : ""}" data-ind="${esc(r.i)}">${esc(r.i)}</button>` : "");
     const metrics = [
+      [RETURN_PERIODS[state.returnPeriod] + "漲跌幅%", cell(returnOf(r.c), 2, true)],
+      ["距52週低點%", cell(performanceOf(r.c).fromLow52, 2, true)],
+      ["距52週高點%", cell(performanceOf(r.c).fromHigh52, 2, true)],
       ["本益比", cell(r.pe)],
       ["股價營收比", r.ps == null ? '<span class="na">—</span>' : cell(r.ps) + (r.ps_basis === "估算" ? '<span class="est">估</span>' : "")],
       ["淨值比", cell(r.pb)],
@@ -802,7 +836,7 @@
 
   // ---------------------------------------------------------------- 啟動
   (async function init() {
-    const [meta, market, rows, tags, movers, history, tdcc] = await Promise.all([
+    const [meta, market, rows, tags, movers, history, tdcc, performance] = await Promise.all([
       getJSON("data/meta.json", null),
       getJSON("data/market.json", null),
       getJSON("data/latest.json", []),
@@ -810,10 +844,18 @@
       getJSON("data/movers.json", null),
       getJSON("data/market_history.json", null),
       getJSON("data/tdcc.json", null),
+      getJSON("data/performance.json", null),
     ]);
     state.meta = meta; state.market = market;
     state.rows = rows || []; state.tags = tags || {}; state.movers = movers;
     state.history = history;
+    if (performance && performance.stocks) state.performance = performance;
+    $("performanceNote").textContent = performance && performance.asOf
+      ? `價格指標資料日：${performance.asOf}。缺少足期資料顯示「—」。`
+      : "價格指標尚待更新，暫顯示「—」。";
+    const returnMobile = $("returnPeriodMobile");
+    returnMobile.innerHTML = periodOptions();
+    returnMobile.addEventListener("change", (e) => changeReturnPeriod(e.target.value));
     if (tdcc && tdcc.d) state.tdcc = tdcc;
 
     // 更新時間在窄螢幕以 CSS 隱藏，只留資料日期，避免頂欄被截斷
