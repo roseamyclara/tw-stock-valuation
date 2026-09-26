@@ -304,49 +304,6 @@
     </div>`;
   }
 
-  // ---------------------------------------------------------------- 總覽卡
-  function renderTiles() {
-    const m = state.market && state.market.markets;
-    const counts = (state.meta && state.meta.counts) || {};
-    $("tiles").innerHTML = MARKETS.map((k) => {
-      const d = (m && m[k]) || {};
-      const n = counts[k] || d.count || 0;
-      const weighted = [
-        d.peWeighted ? `本益比 ${fmt(d.peWeighted)}` : null,
-        d.psWeighted ? `股價營收比 ${fmt(d.psWeighted)}` : null,
-      ].filter(Boolean).join("、");
-      const pe = fmt(d.pe), ps = fmt(d.ps);
-      return `<article class="tile" style="--tile-color:${SERIES[k]}">
-        <div class="name"><span class="swatch" style="background:${SERIES[k]}"></span>${LABEL[k]}</div>
-        <div class="figs">
-          <div class="fig"><div class="v">${pe ?? '<span class="dash">—</span>'}</div><div class="k">本益比中位數</div></div>
-          <div class="fig"><div class="v">${ps ?? '<span class="dash">—</span>'}</div><div class="k">股價營收比中位數</div></div>
-        </div>
-        <div class="cnt">${n} 檔${d.cap ? "・總市值 " + human(d.cap) : ""}</div>
-        ${weighted ? `<div class="cnt">市值加權：${weighted}</div>` : ""}
-        ${sparkline(k)}
-      </article>`;
-    }).join("");
-  }
-
-  function renderHeroStats() {
-    const meta = state.meta;
-    if (!meta) return;
-    const cap = state.market && state.market.markets
-      ? MARKETS.reduce((s, k) => s + ((state.market.markets[k] || {}).cap || 0), 0)
-      : null;
-    const items = [
-      ["追蹤檔數", meta.total],
-      ["有本益比", meta.withPE],
-      ["有月營收", meta.withRevenue],
-      ["有財報", meta.withFinancials],
-    ];
-    if (cap) items.unshift(["三板塊總市值", human(cap)]);
-    $("heroStats").innerHTML = items
-      .map(([k, v]) => `<span class="pill-stat">${k} <b>${v}</b></span>`)
-      .join("");
-  }
-
   // ---------------------------------------------------------------- 表格欄位
   const COLS = [
     { k: "c", t: "代號", cls: "code", get: (r) => r.c },
@@ -914,7 +871,7 @@
     );
   }
 
-  function draw() { renderTiles(); renderMovers(); }
+  function draw() { renderMovers(); }
 
   // ---------------------------------------------------------------- 啟動
   (async function init() {
@@ -967,7 +924,6 @@
 
     renderHead();
     renderColumnPicker();
-    renderHeroStats();
     draw();
     applyFilters();
 

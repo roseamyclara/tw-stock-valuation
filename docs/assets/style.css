@@ -1260,3 +1260,56 @@ footer a:hover { color: var(--accent); border-bottom-color: var(--accent); }
 .column-picker.is-dragging #columnPool { border-color: var(--accent); }
 .column-chip:focus-visible, .column-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 860px) { .column-picker { padding: 12px; } .column-chip { min-height: 44px; } }
+
+/* 台股工作表：低彩度、緊湊密度；保留數字正負號辨識漲跌。 */
+body.work-sheet {
+  --page:#f5f6f7; --page-tint:transparent;
+  --surface-1:#fff; --surface-2:#f1f2f3; --surface-3:#e6e8ea;
+  --text-primary:#30343b; --text-secondary:#505761; --muted:#68717c;
+  --border:#d9dde2; --border-soft:#e7eaee;
+  --accent:#596775; --accent-2:#596775; --accent-soft:#edf0f3;
+  --up:#444e59; --down:#69737e; --up-soft:#f0f2f4; --down-soft:#f0f2f4;
+  --series-1:#596775; --series-2:#87909a; --series-3:#a1a8b0;
+  --chip:#f0f2f4; --shadow-1:none; --shadow-2:none;
+  --r-sm:3px; --r-md:4px; --r-lg:5px; --r-xl:6px;
+  --topbar-h:44px;
+  color-scheme:light; background:var(--page); font-size:13px;
+}
+.work-sheet .topbar { background:#fff; backdrop-filter:none; border-bottom:1px solid var(--border); }
+.work-sheet .topbar-in { min-height:44px; height:44px; }
+.work-sheet .brand { font-size:13px; gap:8px; }
+.work-sheet .brand-mark { width:24px; height:24px; background:#eef0f2; color:#596775; box-shadow:none; border-radius:3px; }
+.work-sheet #themeToggle { display:none; }
+.work-sheet .wrap { max-width:1600px; padding-top:16px; }
+.worksheet-heading { display:flex; align-items:baseline; gap:14px; margin:0 0 12px; }
+.worksheet-heading h1 { font-size:18px; line-height:1.4; font-weight:600; margin:0; letter-spacing:0; }
+.worksheet-heading p { color:var(--muted); margin:0; font-size:12px; }
+.work-sheet .section { margin-top:16px; }
+.worksheet-analysis { border:1px solid var(--border); border-radius:4px; padding:10px 14px; background:var(--surface-1); }
+.worksheet-analysis > summary { cursor:pointer; color:var(--text-secondary); font-size:12px; }
+.worksheet-analysis[open] > summary { margin-bottom:16px; }
+.work-sheet h2 { font-size:16px; letter-spacing:0; }
+.work-sheet h2::before { display:none; }
+.work-sheet .stock-bar { background:var(--page); backdrop-filter:none; padding-top:10px; padding-bottom:10px; }
+.work-sheet .search, .work-sheet .seg, .work-sheet select { border-radius:4px; box-shadow:none; }
+.work-sheet .column-picker { padding:10px 12px; margin:10px 0; border-radius:4px; box-shadow:none; }
+.work-sheet .column-picker-heading { font-size:12px; }
+.work-sheet .column-zone { min-height:40px; padding:6px; gap:6px; }
+.work-sheet .column-chip { min-height:30px; padding:5px 9px; border-radius:3px; font-size:12px; box-shadow:none; }
+.work-sheet .table-tools { margin:8px 0; }
+.work-sheet .table-shell { border-radius:4px; box-shadow:none; }
+.work-sheet #tbl th { font-size:12px; }
+.work-sheet #tbl td { padding-top:9px; padding-bottom:9px; font-size:13px; }
+.work-sheet .tag, .work-sheet .mkt { border-radius:3px; font-size:11px; }
+.work-sheet .column-actions { margin-top:3px; }
+.work-sheet .column-actions button { height:20px; min-width:20px; }
+@media(max-width:860px) {
+  .worksheet-heading { flex-wrap:wrap; gap:4px 12px; }
+  .work-sheet .column-chip { min-height:40px; }
+}
+.work-sheet .section { margin-bottom:14px; }
+.work-sheet .search input { border-radius:4px; height:34px; padding-top:7px; padding-bottom:7px; font-size:13px; }
+.work-sheet .seg button, .work-sheet .filters select { min-height:34px; padding-top:6px; padding-bottom:6px; font-size:12px; }
+.work-sheet .column-zone { margin:6px 0 10px; }
+.work-sheet .column-zone:last-of-type { margin-bottom:0; }
+.work-sheet .stock-bar-head { margin-bottom:8px; }
