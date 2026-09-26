@@ -114,12 +114,16 @@
         <div class="select">
           <select id="industry" aria-label="選擇產業"><option value="">所有產業</option></select>
         </div>
+        <label class="select return-mobile">漲跌幅期間
+          <select id="returnPeriodMobile" aria-label="選擇漲跌幅期間"></select>
+        </label>
         <div class="select sort-mobile">
           <select id="sortMobile" aria-label="排序依據"></select>
         </div>
       </div>
     </div>
 
+    <p class="note" id="performanceNote" role="status"></p>
     <details class="disclosure">
       <summary>怎麼看這張表？業務標籤從哪來？</summary>
       <p class="note">
@@ -131,6 +135,13 @@
         <strong>關於業務標籤的來源</strong>：實線標籤（如「晶圓代工」「外籍移工」）是<strong>人工整理</strong>的，
         不是官方資料，僅供快速辨識，可能有錯或過時，請以公司公告為準；目前涵蓋 2,342 檔中的
         <span id="tagCoverage">—</span> 檔。虛線外框的標籤則是官方開放資料的產業別，用於尚未整理到的公司。
+      </p>
+      <p class="note">
+        <strong>漲跌幅與52週高低點</strong>：期間可用表頭下拉選單切換，點「漲跌幅%」排序。
+        漲跌幅＝（期末收盤價 ÷ 基準收盤價 − 1）× 100；今年迄今以前一年最後交易日為基準，
+        其餘採日曆期間，遇休市取之前最近交易日。價格未還原權息，不含股息再投資，除權、分割或減資可能影響比較。
+        距低點＝（收盤價 ÷ 52週最低成交價 − 1）× 100；距高點＝（收盤價 ÷ 52週最高成交價 − 1）× 100，
+        低於高點時為負值。上市、上櫃取交易所行情；興櫃沿用每日均價，歷史不足或無完整高低價資料顯示「—」。
       </p>
       <p class="note">
         <strong>關於大戶持股</strong>：「400張以上%」來自
