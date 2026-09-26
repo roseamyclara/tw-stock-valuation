@@ -1426,3 +1426,38 @@ body.off-hours { --accent:#087f8c; --accent-2:#27b8ac; --accent-soft:rgba(8,127,
   .hero-links a { padding:10px 12px; gap:12px; }
   .off-hours .hero-eyebrow { font-size:9px; letter-spacing:.1em; }
 }
+
+/* 開放式版面：以文字、留白與細分隔線建立層次。 */
+.off-hours .worksheet-heading { background:none; color:var(--text-primary); border:0; border-radius:0; padding:48px 0 36px; margin:0 0 20px; min-height:0; overflow:visible; }
+.off-hours .hero-eyebrow { color:var(--accent); margin-bottom:22px; }
+.off-hours .worksheet-heading h1 { font-size:clamp(36px,5.4vw,68px); letter-spacing:-.035em; font-weight:650; }
+.off-hours .worksheet-heading p { color:var(--text-secondary); max-width:none; margin-top:20px; }
+.off-hours .worksheet-analysis { border:0; border-top:1px solid var(--border); border-bottom:1px solid var(--border); border-radius:0; background:none; padding:24px 0; }
+.off-hours .card { border:0; border-radius:0; padding:8px 0; background:none; box-shadow:none; }
+.off-hours .movers-grid { gap:48px; }
+.off-hours .movers-grid .card + .card { padding-left:28px; border-left:1px solid var(--border); }
+.off-hours .column-picker { border:0; border-radius:0; background:none; padding:16px 0; border-top:1px solid var(--border); }
+.off-hours .column-zone,.work-sheet .column-zone { border:0; background:none; padding:6px 0; border-radius:0; gap:6px 18px; }
+.off-hours .column-chip,.work-sheet .column-chip { border:0; border-radius:0; background:none; box-shadow:none; padding:6px 2px; border-bottom:1px solid transparent; color:var(--text-secondary); }
+.off-hours .column-chip:hover,.work-sheet .column-chip:hover { color:var(--accent); background:none; border-bottom-color:var(--accent); }
+.off-hours .column-chip.is-selected,.work-sheet .column-chip.is-selected { border:0; border-bottom:1px solid var(--accent); color:var(--accent); background:none; }
+.off-hours .table-shell,.work-sheet .table-shell { border-radius:0; box-shadow:none; }
+#tbl th[draggable="true"] { cursor:grab; user-select:none; }
+#tbl th[draggable="true"]:active { cursor:grabbing; }
+#tbl th[draggable="true"]:hover { color:var(--accent); }
+#tbl th .return-period { cursor:pointer; }
+.work-sheet .sheet-toolbar { background:none; border-radius:0; padding:4px 0 10px; border-bottom:1px solid var(--border); }
+.work-sheet .sheet-toolbar button { border-radius:0; padding:7px 12px; }
+.work-sheet .sheet-toolbar button:hover { background:none; color:var(--accent); text-decoration:underline; text-underline-offset:6px; }
+.work-sheet .worksheet-heading { margin-left:0; }
+.work-sheet .sheet-formula { border-left:0; border-right:0; }
+.display-modes { border:0; border-radius:0; background:none; gap:12px; padding:0; }
+.display-modes button { background:none; border-radius:0; padding:6px 2px; border-bottom:2px solid transparent; }
+.display-modes button[aria-pressed="true"] { color:var(--accent); background:none; border-bottom-color:var(--accent); }
+.off-hours .display-modes { border-radius:0; }
+@media(max-width:860px) {
+  .off-hours .worksheet-heading { padding:30px 0 24px; }
+  .off-hours .worksheet-analysis { padding:20px 0; }
+  .off-hours .movers-grid { gap:24px; }
+  .off-hours .movers-grid .card + .card { padding:20px 0 0; border-left:0; border-top:1px solid var(--border); }
+}

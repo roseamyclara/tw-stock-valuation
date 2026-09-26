@@ -398,6 +398,7 @@
 
   function bindColumnDrag(el, key) {
     el.addEventListener("dragstart", e => {
+      if (e.target.closest("select")) { e.preventDefault(); return; }
       draggedColumn = key;
       e.dataTransfer.setData("text/plain", key);
       e.dataTransfer.effectAllowed = "move";
@@ -438,7 +439,7 @@
     pool.innerHTML = available.map(c => `<button type="button" class="column-chip" draggable="true" data-column="${c.k}" aria-label="加入${columnLabel(c)}">＋ ${columnLabel(c)}</button>`).join("") || '<span class="column-empty">所有欄位都已加入；拖曳表頭到此處即可移除</span>';
     selected.innerHTML = state.selectedColumns.map(k => {
       const c = COLS.find(c => c.k === k);
-      return `<button type="button" class="column-chip is-selected" draggable="true" data-column="${k}" aria-label="移除${columnLabel(c)}">⠿ ${columnLabel(c)} <span aria-hidden="true">×</span></button>`;
+      return `<button type="button" class="column-chip is-selected" draggable="true" data-column="${k}" aria-label="移除${columnLabel(c)}">${columnLabel(c)}</button>`;
     }).join("") || '<span class="column-empty">拖曳上方方塊到這裡，或點方塊加入指標</span>';
     for (const [zone, remove] of [[pool, true], [selected, false]]) {
       zone.querySelectorAll("[data-column]").forEach(el => {
@@ -481,12 +482,12 @@
     const ind = s
       ? `<span class="sort-ind" aria-hidden="true">${s.dir > 0 ? "↑" : "↓"}<b>${i + 1}</b></span>`
       : "";
-    const controls = FIXED_COLUMNS.includes(c.k) ? "" : `<span class="column-actions"><button type="button" class="column-grip" draggable="true" aria-label="拖曳${columnLabel(c)}" title="拖曳調整順序，或拖回上方可選欄位">⠿</button><button type="button" class="column-remove" aria-label="移除${columnLabel(c)}" title="移回上方可選欄位">×</button></span>`;
+
     const tip = c.sel ? `${c.sel}｜${HEAD_HINT}` : HEAD_HINT;
-    if (c.k === "priceReturn") return `<th data-letter="${String.fromCharCode(65 + columnIndex)}" data-k="${c.k}" aria-sort="${aria}" title="${HEAD_HINT}">
+    if (c.k === "priceReturn") return `<th draggable="${!FIXED_COLUMNS.includes(c.k)}" data-letter="${String.fromCharCode(65 + columnIndex)}" data-k="${c.k}" aria-sort="${aria}" title="${HEAD_HINT}">
       <button type="button" class="return-sort" aria-label="排序漲跌幅">${c.t}${ind}</button>
-      <select class="return-period" aria-label="選擇漲跌幅期間">${periodOptions()}</select>${controls}</th>`;
-    return `<th data-letter="${String.fromCharCode(65 + columnIndex)}" data-k="${c.k}" aria-sort="${aria}" title="${tip}">${c.t}${ind}${controls}</th>`;
+      <select class="return-period" aria-label="選擇漲跌幅期間">${periodOptions()}</select></th>`;
+    return `<th draggable="${!FIXED_COLUMNS.includes(c.k)}" data-letter="${String.fromCharCode(65 + columnIndex)}" data-k="${c.k}" aria-sort="${aria}" title="${tip}">${c.t}${ind}</th>`;
   }
 
   /** 只重畫表頭（排序條件變動時呼叫），innerHTML 會換掉節點所以事件要重綁 */
@@ -496,12 +497,11 @@
     bindReturnPeriod();
     thead.querySelectorAll("th").forEach(th => {
       th.addEventListener("click", e => {
-        if (!e.target.closest("select, .column-actions")) sortBy(th.dataset.k);
+        if (!e.target.closest("select")) sortBy(th.dataset.k);
       });
       const key = th.dataset.k;
       if (!FIXED_COLUMNS.includes(key)) {
-        bindColumnDrag(th.querySelector(".column-grip"), key);
-        th.querySelector(".column-remove").addEventListener("click", () => changeColumn(key, null, true));
+        bindColumnDrag(th, key);
         bindColumnDrop(th, false, key);
       }
     });
@@ -628,6 +628,20 @@
   bindColumnDrop($("columnPool"), true);
   bindColumnDrop($("selectedColumns"));
   bindColumnDrop(scroller);
+  // 只有確實放到網頁中、表格外時移除；取消拖曳不影響欄位。
+  document.addEventListener("dragover", e => {
+    if (!draggedColumn || e.target.closest(".table-scroll, #selectedColumns")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  });
+  document.addEventListener("drop", e => {
+    if (!draggedColumn || e.target.closest(".table-scroll, #selectedColumns")) return;
+    e.preventDefault();
+    const key = draggedColumn;
+    draggedColumn = null;
+    document.querySelectorAll(".drop-active, .is-dragging").forEach(el => el.classList.remove("drop-active", "is-dragging"));
+    changeColumn(key, null, true);
+  });
 
 
   function applyFilters() {
@@ -927,9 +941,7 @@
     state.rows = rows || []; state.tags = tags || {}; state.movers = movers;
     state.history = history;
     if (performance && performance.stocks) state.performance = performance;
-    $("performanceNote").textContent = performance && performance.asOf
-      ? `價格指標資料日：${performance.asOf}。缺少足期資料顯示「—」。`
-      : "價格指標尚待更新，暫顯示「—」。";
+
     const returnMobile = $("returnPeriodMobile");
     returnMobile.innerHTML = periodOptions();
     returnMobile.addEventListener("change", (e) => changeReturnPeriod(e.target.value));
