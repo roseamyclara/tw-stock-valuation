@@ -49,6 +49,15 @@ jobs:
         run: python build_tdcc.py
         continue-on-error: true
 
+      - name: 補齊價格比較基準
+        working-directory: scripts
+        run: python fetch_performance.py --max-requests 80
+        continue-on-error: true
+
+      - name: 計算期間漲跌幅與52週距離
+        working-directory: scripts
+        run: python build_performance.py
+
       - name: commit 資料
         run: |
           git config user.name  "github-actions[bot]"

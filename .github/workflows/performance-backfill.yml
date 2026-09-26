@@ -1,0 +1,37 @@
+name: 價格表現歷史回補
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: data-update
+  cancel-in-progress: false
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: 回補52週盤中高低價與五年比較基準
+        working-directory: scripts
+        run: python fetch_performance.py --backfill --max-requests 800
+        continue-on-error: true
+      - name: 計算已取得的資料
+        if: always()
+        working-directory: scripts
+        run: python build_performance.py
+      - name: 保存進度
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/data/performance*.json
+          if ! git diff --staged --quiet; then
+            git commit -m '更新價格表現與歷史回補進度'
+            git push
+          fi
