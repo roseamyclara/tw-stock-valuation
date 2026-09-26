@@ -135,11 +135,11 @@
     document.querySelectorAll("[data-display-mode]").forEach(button => {
       button.setAttribute("aria-pressed", String(button.dataset.displayMode === (working ? "work" : "off")));
     });
-    document.title = working ? "資料工作表" : "看懂台股・現在貴不貴";
-    document.querySelector(".brand-txt").textContent = working ? "資料工作表" : "台股估值追蹤";
+    document.title = working ? "資料工作表" : "台股觀測站｜價格、產業與估值";
+    document.querySelector(".brand-txt").textContent = working ? "資料工作表" : "台股觀測站";
     document.querySelector(".brand-mark").textContent = working ? "▤" : "TW";
-    document.querySelector(".worksheet-heading h1").textContent = working ? "資料工作表" : "看懂台股，現在貴不貴";
-    document.querySelector(".worksheet-heading p").textContent = working ? "每日資料 · 篩選與比較" : "掌握價格變化，探索產業與估值";
+    document.querySelector(".worksheet-heading h1").textContent = working ? "資料工作表" : "台股觀測站";
+    document.querySelector(".worksheet-heading p").textContent = working ? "每日資料 · 篩選與比較" : "從價格到產業，找到值得追蹤的下一個訊號。";
     $("moversSection").open = !working;
   }
   let savedDisplayMode = "work";
@@ -152,6 +152,18 @@
       try { localStorage.setItem("tw-display-mode", mode); } catch (_) {}
     });
   });
+
+  $("sheetSearch")?.addEventListener("click", () => $("q").focus());
+  $("sheetColumns")?.addEventListener("click", () => {
+    document.querySelector(".column-picker").scrollIntoView({ block: "center" });
+    document.querySelector(".column-chip")?.focus({ preventScroll: true });
+  });
+  for (const id of ["sheetAnalysis", "sheetAnalysisTab"]) {
+    $(id)?.addEventListener("click", () => {
+      $("moversSection").open = true;
+      $("moversSection").scrollIntoView({ block: "start" });
+    });
+  }
 
   // ---------------------------------------------------------------- 頂欄與回頂端
   const topbar = $("topbar");
@@ -462,7 +474,7 @@
 
   const HEAD_HINT = `點一次由大到小、再點一次由小到大、第三次移除；最多同時 ${MAX_SORTS} 欄，數字越小越優先`;
 
-  function thHtml(c) {
+  function thHtml(c, columnIndex) {
     const i = state.sorts.findIndex((s) => s.k === c.k);
     const s = i >= 0 ? state.sorts[i] : null;
     const aria = s ? (s.dir > 0 ? "ascending" : "descending") : "none";
@@ -471,10 +483,10 @@
       : "";
     const controls = FIXED_COLUMNS.includes(c.k) ? "" : `<span class="column-actions"><button type="button" class="column-grip" draggable="true" aria-label="拖曳${columnLabel(c)}" title="拖曳調整順序，或拖回上方可選欄位">⠿</button><button type="button" class="column-remove" aria-label="移除${columnLabel(c)}" title="移回上方可選欄位">×</button></span>`;
     const tip = c.sel ? `${c.sel}｜${HEAD_HINT}` : HEAD_HINT;
-    if (c.k === "priceReturn") return `<th data-k="${c.k}" aria-sort="${aria}" title="${HEAD_HINT}">
+    if (c.k === "priceReturn") return `<th data-letter="${String.fromCharCode(65 + columnIndex)}" data-k="${c.k}" aria-sort="${aria}" title="${HEAD_HINT}">
       <button type="button" class="return-sort" aria-label="排序漲跌幅">${c.t}${ind}</button>
       <select class="return-period" aria-label="選擇漲跌幅期間">${periodOptions()}</select>${controls}</th>`;
-    return `<th data-k="${c.k}" aria-sort="${aria}" title="${tip}">${c.t}${ind}${controls}</th>`;
+    return `<th data-letter="${String.fromCharCode(65 + columnIndex)}" data-k="${c.k}" aria-sort="${aria}" title="${tip}">${c.t}${ind}${controls}</th>`;
   }
 
   /** 只重畫表頭（排序條件變動時呼叫），innerHTML 會換掉節點所以事件要重綁 */
@@ -678,7 +690,7 @@
     const slice = state.view.slice(0, state.shown);
 
     $("tbody").innerHTML = slice
-      .map((r) => `<tr data-c="${r.c}">${visibleCols().map((c) => `<td class="${c.cls || ""}">${c.get(r) ?? '<span class="na">—</span>'}</td>`).join("")}</tr>`)
+      .map((r, rowIndex) => `<tr data-row="${rowIndex + 1}" data-c="${r.c}">${visibleCols().map((c) => `<td data-row="${rowIndex + 1}" class="${c.cls || ""}">${c.get(r) ?? '<span class="na">—</span>'}</td>`).join("")}</tr>`)
       .join("");
     $("cards").innerHTML = slice.map(stockCard).join("");
 
