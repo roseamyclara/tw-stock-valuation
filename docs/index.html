@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#08080c" media="(prefers-color-scheme: dark)">
 <title>台股估值追蹤 — 上市／上櫃／興櫃 P/E、P/S 與成長率</title>
 <meta name="description" content="台灣股市上市、上櫃、興櫃三個板塊的本益比、股價營收比、月營收年增率與獲利成長率，資料取自證交所與櫃買中心官方開放資料，每交易日自動更新。">
-<link rel="stylesheet" href="assets/style.css?v=20260926-table-v2">
+<link rel="stylesheet" href="assets/style.css?v=20260926-columns-v3">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>📈</text></svg>">
 </head>
 <body>
@@ -139,7 +139,7 @@
       <p class="note">
         <strong>漲跌幅與52週高低點</strong>：期間可用表頭下拉選單切換，點「漲跌幅%」排序。
         漲跌幅＝（期末收盤價 ÷ 基準收盤價 − 1）× 100；今年迄今以前一年最後交易日為基準，
-        其餘採日曆期間，遇休市取之前最近交易日。價格未還原權息，不含股息再投資，除權、分割或減資可能影響比較。
+        一日以前一交易日收盤價為基準；其餘採日曆期間，遇休市取之前最近交易日。價格未還原權息，不含股息再投資，除權、分割或減資可能影響比較。
         距低點＝（收盤價 ÷ 52週最低成交價 − 1）× 100；距高點＝（收盤價 ÷ 52週最高成交價 − 1）× 100，
         低於高點時為負值。上市、上櫃取交易所行情；興櫃沿用每日均價，歷史不足或無完整高低價資料顯示「—」。
       </p>
@@ -154,16 +154,14 @@
       </p>
     </details>
 
+    <div class="column-picker" aria-label="自訂表格欄位">
+      <div class="column-picker-heading"><strong>可選欄位</strong><span>拖入下方表格即可加入，拖回此區即可移除；也可直接點方塊操作。</span></div>
+      <div id="columnPool" class="column-zone" role="group" aria-label="可選欄位，拖回此處移除"></div>
+      <div class="column-picker-heading"><strong>表格內欄位</strong><span>代號、名稱、業務標籤固定保留。拖曳方塊或表頭的 ⠿ 調整順序，點 × 移除。</span></div>
+      <div id="selectedColumns" class="column-zone selected-zone" role="group" aria-label="表格內欄位，拖入此處加入"></div>
+      <span id="columnStatus" class="sr-only" role="status"></span>
+    </div>
     <div class="table-tools">
-      <label class="select column-view">顯示欄位
-        <select id="columnView" aria-label="顯示欄位">
-          <option value="price">行情與漲跌</option>
-          <option value="valuation">估值與殖利率</option>
-          <option value="growth">營收與獲利</option>
-          <option value="ownership">大戶籌碼</option>
-          <option value="all">全部指標</option>
-        </select>
-      </label>
       <span id="tableScrollHint" class="table-hint"></span>
       <div class="table-nav" role="group" aria-label="捲動表格">
         <button id="tablePrev" type="button" aria-label="向左捲動表格" disabled>←</button>
@@ -202,6 +200,6 @@
   <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 16V5m0 0L5 10m5-5 5 5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
 </button>
 
-<script src="assets/app.js?v=20260926-table-v2"></script>
+<script src="assets/app.js?v=20260926-columns-v3"></script>
 </body>
 </html>
