@@ -127,6 +127,32 @@
     draw();
   });
 
+  // 顯示模式只改呈現，保留搜尋、欄位與排序狀態。
+  function applyDisplayMode(mode) {
+    const working = mode !== "off";
+    document.body.classList.toggle("work-sheet", working);
+    document.body.classList.toggle("off-hours", !working);
+    document.querySelectorAll("[data-display-mode]").forEach(button => {
+      button.setAttribute("aria-pressed", String(button.dataset.displayMode === (working ? "work" : "off")));
+    });
+    document.title = working ? "資料工作表" : "看懂台股・現在貴不貴";
+    document.querySelector(".brand-txt").textContent = working ? "資料工作表" : "台股估值追蹤";
+    document.querySelector(".brand-mark").textContent = working ? "▤" : "TW";
+    document.querySelector(".worksheet-heading h1").textContent = working ? "資料工作表" : "看懂台股，現在貴不貴";
+    document.querySelector(".worksheet-heading p").textContent = working ? "每日資料 · 篩選與比較" : "掌握價格變化，探索產業與估值";
+    $("moversSection").open = !working;
+  }
+  let savedDisplayMode = "work";
+  try { savedDisplayMode = localStorage.getItem("tw-display-mode") || "work"; } catch (_) {}
+  applyDisplayMode(savedDisplayMode);
+  document.querySelectorAll("[data-display-mode]").forEach(button => {
+    button.addEventListener("click", () => {
+      const mode = button.dataset.displayMode;
+      applyDisplayMode(mode);
+      try { localStorage.setItem("tw-display-mode", mode); } catch (_) {}
+    });
+  });
+
   // ---------------------------------------------------------------- 頂欄與回頂端
   const topbar = $("topbar");
   const toTop = $("toTop");
