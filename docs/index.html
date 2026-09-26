@@ -6,24 +6,20 @@
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#f4f4f7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#08080c" media="(prefers-color-scheme: dark)">
-<title>台股估值追蹤 — 上市／上櫃／興櫃 P/E、P/S 與成長率</title>
+<title>資料工作表</title>
 <meta name="description" content="台灣股市上市、上櫃、興櫃三個板塊的本益比、股價營收比、月營收年增率與獲利成長率，資料取自證交所與櫃買中心官方開放資料，每交易日自動更新。">
-<link rel="stylesheet" href="assets/style.css?v=20260926-columns-v3">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>📈</text></svg>">
+<link rel="stylesheet" href="assets/style.css?v=20260926-worksheet-v1">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='2' y='2' width='12' height='12' rx='1' fill='%236b7280'/><path d='M3 6h10M3 10h10M7 3v10' stroke='white'/></svg>">
 </head>
-<body>
+<body class="work-sheet">
 
 <!-- ============ 頂欄 ============ -->
 <header class="topbar" id="topbar">
   <div class="topbar-in">
     <a class="brand" href="#top">
-      <span class="brand-mark" aria-hidden="true">TW</span>
-      <span class="brand-txt">估值追蹤</span>
+      <span class="brand-mark" aria-hidden="true">▤</span>
+      <span class="brand-txt">資料工作表</span>
     </a>
-    <nav class="market-nav" aria-label="選擇市場">
-      <a href="./" aria-current="page">台股</a>
-      <a href="us.html">美股</a>
-    </nav>
     <span class="asof" id="asof">載入中…</span>
     <button class="icon-btn" id="themeToggle" type="button" aria-label="切換深淺色"></button>
   </div>
@@ -31,35 +27,11 @@
 
 <div class="wrap" id="top">
 
-  <!-- ============ Hero ============ -->
-  <section class="hero">
-    <h1>看懂台股<br>現在貴不貴</h1>
-    <p class="lede">
-      上市、上櫃、興櫃三個板塊的本益比與股價營收比，加上最新月份的營收年增率、累計年增率與獲利成長率。
-      資料全部取自證交所與櫃買中心的官方開放資料，每個交易日自動更新。
-    </p>
-    <div class="hero-stats" id="heroStats"></div>
-  </section>
-
-  <!-- ============ 市場總覽 ============ -->
-  <section class="section" id="market">
-    <div class="section-head">
-      <h2>市場估值水準</h2>
-      <p class="note">
-        各板塊成分股的中位數（市值加權值另列於卡片下方）。中位數不會被少數超大型股拉著走。
-        <strong>興櫃沒有本益比</strong>——官方未發布興櫃公司的損益表，沒有淨利就算不出本益比；
-        但興櫃有月營收，所以股價營收比仍然算得出來。
-      </p>
-    </div>
-    <div class="tiles" id="tiles">
-      <div class="skeleton sk-tile"></div>
-      <div class="skeleton sk-tile"></div>
-      <div class="skeleton sk-tile"></div>
-    </div>
-  </section>
+  <section class="worksheet-heading"><h1>資料工作表</h1><p>每日資料 · 篩選與比較</p></section>
 
   <!-- ============ 漲幅排行與族群 ============ -->
-  <section class="section" id="moversSection">
+  <details class="section worksheet-analysis" id="moversSection">
+    <summary>展開排行與族群分析</summary>
     <div class="section-head">
       <h2>漲幅排行與族群</h2>
       <p class="note" id="moversNote">載入中…</p>
@@ -90,7 +62,7 @@
         <ol class="rank" id="rankList"></ol>
       </div>
     </div>
-  </section>
+  </details>
 
   <!-- ============ 個股表 ============ -->
   <section class="section" id="stocks">
@@ -200,6 +172,6 @@
   <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 16V5m0 0L5 10m5-5 5 5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
 </button>
 
-<script src="assets/app.js?v=20260926-columns-v3"></script>
+<script src="assets/app.js?v=20260926-worksheet-v1"></script>
 </body>
 </html>
