@@ -348,7 +348,8 @@
     if (note == null) return "";
     const clean = String(note).trim();
     const text = !clean || /^[—–－-]+$/.test(clean) ? "公司未填寫原因" : clean;
-    const source = r.m === "listed" ? "https://mopsov.twse.com.tw/nas/t21/sii/" : "https://mops.twse.com.tw/mops/#/web/t05st10_ifrs";
+    const marketPath = { listed: "sii", otc: "otc", esb: "rotc" }[r.m];
+    const source = `https://mopsov.twse.com.tw/nas/t21/${marketPath}/`;
     return `<div class="revenue-note"><span>${esc(text)}</span><small>${esc(rev.ym || "")} · 公司申報原文 <a href="${source}" target="_blank" rel="noopener noreferrer">官方來源 ↗</a></small></div>`;
   }
 
