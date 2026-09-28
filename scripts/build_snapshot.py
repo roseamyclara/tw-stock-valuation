@@ -245,6 +245,7 @@ def finalise(stocks: dict[str, dict]) -> list[dict]:
             s["rev"] = {
                 "ym": month_key(*parsed) if parsed else None,
                 "amt": r.get("month"),
+                "note": r.get("note", ""),
                 "mom": rnd(r.get("mom")),
                 "yoy": rnd(r.get("yoy")),
                 "cum_yoy": rnd(r.get("cum_yoy")),

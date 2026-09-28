@@ -200,6 +200,7 @@ def norm_revenue(rows: list[dict]) -> dict[str, dict]:
             "industry": str(_first(r, *REV_KEYS["industry"]) or "").strip() or None,
             "name": str(_first(r, *REV_KEYS["name"]) or "").strip() or None,
             "month": num(_first(r, *REV_KEYS["month"])),
+            "note": str(r.get("備註") or "").strip(),
             "last_year_month": num(_first(r, *REV_KEYS["last_year_month"])),
             "mom": num(_first(r, *REV_KEYS["mom"])),
             "yoy": num(_first(r, *REV_KEYS["yoy"])),
