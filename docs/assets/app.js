@@ -34,7 +34,7 @@
   const state = {
     rows: [], view: [], meta: null, market: null, tags: {}, movers: null, history: null,
     tdcc: { date: null, base: null, d: {} },
-    performance: { stocks: {} }, returnPeriod: "d1", selectedColumns: ["p", "cap", "priceReturn", "pe", "ps"],
+    performance: { stocks: {} }, returnPeriod: "d1", revenueNotes: {}, selectedColumns: ["p", "cap", "priceReturn", "pe", "ps", "rev_note"],
     // sorts: [{k, dir}]，最多 3 個，陣列順序就是優先序（索引 0 最優先）
     // 空陣列代表沒設任何條件，套用 DEFAULT_SORTS
     sorts: [], filterMarket: "", industry: "", tag: "", q: "",
@@ -341,6 +341,17 @@
   }
 
   // ---------------------------------------------------------------- 表格欄位
+  function revenueNote(r) {
+    const rev = r.rev || {}, fallback = state.revenueNotes[r.c];
+    const note = Object.prototype.hasOwnProperty.call(rev, "note") ? rev.note
+      : fallback && fallback.ym === rev.ym ? fallback.note : null;
+    if (note == null) return '<span class="na">尚無同期官方說明</span>';
+    const clean = String(note).trim();
+    const text = !clean || /^[—–－-]+$/.test(clean) ? "公司未填寫原因" : clean;
+    const source = r.m === "listed" ? "https://mopsov.twse.com.tw/nas/t21/sii/" : "https://mops.twse.com.tw/mops/#/web/t05st10_ifrs";
+    return `<div class="revenue-note"><span>${esc(text)}</span><small>${esc(rev.ym || "")} · 公司申報原文 <a href="${source}" target="_blank" rel="noopener noreferrer">官方來源 ↗</a></small></div>`;
+  }
+
   const COLS = [
     { k: "c", t: "代號", cls: "code", get: (r) => r.c },
     { k: "n", t: "名稱", cls: "name-cell", get: (r) => `${esc(r.n)} <span class="mkt">${LABEL[r.m]}</span>` },
@@ -365,6 +376,7 @@
     { k: "pb", t: "淨值比", get: (r) => cell(r.pb) },
     { k: "dy", t: "殖利率%", get: (r) => cell(r.dy) },
     { k: "rev_yoy", t: "月營收年增%", get: (r) => cell(r.rev && r.rev.yoy, 1, true), val: (r) => r.rev && r.rev.yoy },
+    { k: "rev_note", t: "營收變動說明", cls: "revenue-note-cell", get: revenueNote },
     { k: "rev_cum", t: "累計年增%", get: (r) => cell(r.rev && r.rev.cum_yoy, 1, true), val: (r) => r.rev && r.rev.cum_yoy },
     { k: "net_yoy", t: "淨利年增%", get: (r) => cell(r.fin && r.fin.net_yoy, 1, true), val: (r) => r.fin && r.fin.net_yoy },
     { k: "eps", t: "EPS", get: (r) => cell(r.fin && r.fin.eps), val: (r) => r.fin && r.fin.eps },
@@ -481,6 +493,7 @@
       ? `<span class="sort-ind" aria-hidden="true">${s.dir > 0 ? "↑" : "↓"}<b>${i + 1}</b></span>`
       : "";
 
+    if (c.k === "rev_note") return `<th draggable="true" data-letter="${String.fromCharCode(65 + columnIndex)}" data-k="rev_note" title="公司申報原文；拖曳可移動或移出表格">${c.t}</th>`;
     const tip = c.sel ? `${c.sel}｜${HEAD_HINT}` : HEAD_HINT;
     if (c.k === "priceReturn") return `<th draggable="${!FIXED_COLUMNS.includes(c.k)}" data-letter="${String.fromCharCode(65 + columnIndex)}" data-k="${c.k}" aria-sort="${aria}" title="${HEAD_HINT}">
       <button type="button" class="return-sort" aria-label="排序漲跌幅">${c.t}${ind}</button>
@@ -495,7 +508,7 @@
     bindReturnPeriod();
     thead.querySelectorAll("th").forEach(th => {
       th.addEventListener("click", e => {
-        if (!e.target.closest("select")) sortBy(th.dataset.k);
+        if (th.dataset.k !== "rev_note" && !e.target.closest("select")) sortBy(th.dataset.k);
       });
       const key = th.dataset.k;
       if (!FIXED_COLUMNS.includes(key)) {
@@ -925,7 +938,7 @@
 
   // ---------------------------------------------------------------- 啟動
   (async function init() {
-    const [meta, market, rows, tags, movers, history, tdcc, performance] = await Promise.all([
+    const [meta, market, rows, tags, movers, history, tdcc, performance, revenueNotes] = await Promise.all([
       getJSON("data/meta.json", null),
       getJSON("data/market.json", null),
       getJSON("data/latest.json", []),
@@ -934,8 +947,10 @@
       getJSON("data/market_history.json", null),
       getJSON("data/tdcc.json", null),
       getJSON("data/performance.json", null),
+      getJSON("data/revenue_notes.json", {}),
     ]);
     state.meta = meta; state.market = market;
+    state.revenueNotes = revenueNotes || {};
     state.rows = rows || []; state.tags = tags || {}; state.movers = movers;
     state.history = history;
     if (performance && performance.stocks) state.performance = performance;

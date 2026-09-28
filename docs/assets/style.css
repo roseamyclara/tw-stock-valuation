@@ -1461,3 +1461,11 @@ body.off-hours { --accent:#087f8c; --accent-2:#27b8ac; --accent-soft:rgba(8,127,
   .off-hours .movers-grid { gap:24px; }
   .off-hours .movers-grid .card + .card { padding:20px 0 0; border-left:0; border-top:1px solid var(--border); }
 }
+
+/* Company-filed monthly revenue explanations: full text, no clipping. */
+.revenue-note-cell { min-width: 280px; max-width: 420px; white-space: normal; text-align: left; }
+.revenue-note { min-width: 220px; max-width: 420px; white-space: normal; overflow-wrap: anywhere; line-height: 1.65; text-align: left; font-size: 13px; font-weight: 400; }
+.revenue-note small { display: block; margin-top: 6px; font-size: 11px; color: var(--muted, #777); }
+.revenue-note a { color: inherit; text-underline-offset: 3px; }
+th[data-k="rev_note"] { cursor: grab; }
+@media(max-width:860px) { .revenue-note { min-width: 0; width: 100%; } }
