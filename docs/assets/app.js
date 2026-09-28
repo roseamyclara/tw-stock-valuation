@@ -345,7 +345,7 @@
     const rev = r.rev || {}, fallback = state.revenueNotes[r.c];
     const note = Object.prototype.hasOwnProperty.call(rev, "note") ? rev.note
       : fallback && fallback.ym === rev.ym ? fallback.note : null;
-    if (note == null) return '<span class="na">尚無同期官方說明</span>';
+    if (note == null) return "";
     const clean = String(note).trim();
     const text = !clean || /^[—–－-]+$/.test(clean) ? "公司未填寫原因" : clean;
     const source = r.m === "listed" ? "https://mopsov.twse.com.tw/nas/t21/sii/" : "https://mops.twse.com.tw/mops/#/web/t05st10_ifrs";
