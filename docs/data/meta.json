@@ -1,6 +1,6 @@
 {
- "asOf": "2026-09-24",
- "updatedAt": "2026-09-29T02:39:20",
+ "asOf": "2026-09-29",
+ "updatedAt": "2026-09-29T19:32:12",
  "counts": {
   "listed": 1088,
   "otc": 892,
@@ -8,11 +8,11 @@
  },
  "total": 2344,
  "sources": {
-  "listed_daily": 1081,
+  "listed_daily": 1083,
   "listed_profile": 1095,
   "listed_revenue": 1086,
   "listed_income": 1080,
-  "otc_quotes": 11660,
+  "otc_quotes": 11730,
   "otc_profile": 893,
   "otc_pe": 889,
   "otc_revenue": 892,
@@ -22,7 +22,7 @@
   "esb_revenue": 363
  },
  "withPE": 1543,
- "withPS": 2303,
+ "withPS": 2308,
  "withRevenue": 2340,
  "withFinancials": 1970
 }
