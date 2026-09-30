@@ -34,7 +34,7 @@
   const state = {
     rows: [], view: [], meta: null, market: null, tags: {}, movers: null, history: null,
     tdcc: { date: null, base: null, d: {} },
-    performance: { stocks: {} }, returnPeriod: "d1", revenueNotes: {}, contractLiabilities: {stocks:{}}, selectedColumns: ["p", "cap", "priceReturn", "pe", "ps", "contract", "rev_note"],
+    performance: { stocks: {} }, returnPeriod: "d1", revenueNotes: {}, selectedColumns: ["p", "cap", "priceReturn", "pe", "ps", "rev_note"],
     // sorts: [{k, dir}]，最多 3 個，陣列順序就是優先序（索引 0 最優先）
     // 空陣列代表沒設任何條件，套用 DEFAULT_SORTS
     sorts: [], filterMarket: "", industry: "", tag: "", q: "",
@@ -353,17 +353,6 @@
     return `<div class="revenue-note"><span>${esc(text)}</span><small>${esc(rev.ym || "")} · 公司申報原文 <a href="${source}" target="_blank" rel="noopener noreferrer">官方來源 ↗</a></small></div>`;
   }
 
-  function contractCell(r) {
-    const d = state.contractLiabilities.stocks[r.c];
-    if (!d) return '<span class="na">待取得</span>';
-    const lines = [];
-    if (d.current != null) lines.push(`流動 ${human(d.current)}`);
-    if (d.noncurrent != null) lines.push(`非流動 ${human(d.noncurrent)}`);
-    if (!lines.length && d.total != null) lines.push(`合計 ${human(d.total)}`);
-    const text = lines.length ? lines.join("<br>") : (d.status === "unavailable" ? "尚無該季報表" : "表內未單獨列示");
-    return `<div class="contract-cell" title="資產負債表單獨列示金額，單位為新台幣；未列示不代表零，可能包含在財報附註中。">${text}<small>${d.year} Q${d.quarter} · ${esc(d.basis || "財報")} <a href="${esc(d.source)}" target="_blank" rel="noopener noreferrer">來源 ↗</a></small></div>`;
-  }
-
   const COLS = [
     { k: "c", t: "代號", cls: "code", get: (r) => r.c },
     { k: "n", t: "名稱", cls: "name-cell", get: (r) => `${esc(r.n)} <span class="mkt">${LABEL[r.m]}</span>` },
@@ -388,7 +377,6 @@
     { k: "pb", t: "淨值比", get: (r) => cell(r.pb) },
     { k: "dy", t: "殖利率%", get: (r) => cell(r.dy) },
     { k: "rev_yoy", t: "月營收年增%", get: (r) => cell(r.rev && r.rev.yoy, 1, true), val: (r) => r.rev && r.rev.yoy },
-    { k: "contract", t: "合約負債", cls: "contract-liability-cell", get: contractCell },
     { k: "rev_note", t: "營收變動說明", cls: "revenue-note-cell", get: revenueNote },
     { k: "rev_cum", t: "累計年增%", get: (r) => cell(r.rev && r.rev.cum_yoy, 1, true), val: (r) => r.rev && r.rev.cum_yoy },
     { k: "net_yoy", t: "淨利年增%", get: (r) => cell(r.fin && r.fin.net_yoy, 1, true), val: (r) => r.fin && r.fin.net_yoy },
@@ -506,7 +494,6 @@
       ? `<span class="sort-ind" aria-hidden="true">${s.dir > 0 ? "↑" : "↓"}<b>${i + 1}</b></span>`
       : "";
 
-    if (c.k === "contract") return `<th draggable="true" data-letter="${String.fromCharCode(65 + columnIndex)}" data-k="contract" title="合約負債分流動、非流動列示；可拖曳移動或移出">${c.t}</th>`;
     if (c.k === "rev_note") return `<th draggable="true" data-letter="${String.fromCharCode(65 + columnIndex)}" data-k="rev_note" title="公司申報原文；拖曳可移動或移出表格">${c.t}</th>`;
     const tip = c.sel ? `${c.sel}｜${HEAD_HINT}` : HEAD_HINT;
     if (c.k === "priceReturn") return `<th draggable="${!FIXED_COLUMNS.includes(c.k)}" data-letter="${String.fromCharCode(65 + columnIndex)}" data-k="${c.k}" aria-sort="${aria}" title="${HEAD_HINT}">
@@ -522,7 +509,7 @@
     bindReturnPeriod();
     thead.querySelectorAll("th").forEach(th => {
       th.addEventListener("click", e => {
-        if (!["rev_note", "contract"].includes(th.dataset.k) && !e.target.closest("select")) sortBy(th.dataset.k);
+        if (th.dataset.k !== "rev_note" && !e.target.closest("select")) sortBy(th.dataset.k);
       });
       const key = th.dataset.k;
       if (!FIXED_COLUMNS.includes(key)) {
@@ -952,7 +939,7 @@
 
   // ---------------------------------------------------------------- 啟動
   (async function init() {
-    const [meta, market, rows, tags, movers, history, tdcc, performance, revenueNotes, contractLiabilities] = await Promise.all([
+    const [meta, market, rows, tags, movers, history, tdcc, performance, revenueNotes] = await Promise.all([
       getJSON("data/meta.json", null),
       getJSON("data/market.json", null),
       getJSON("data/latest.json", []),
@@ -962,11 +949,9 @@
       getJSON("data/tdcc.json", null),
       getJSON("data/performance.json", null),
       getJSON("data/revenue_notes.json", {}),
-      getJSON("data/contract_liabilities.json", {stocks:{}}),
     ]);
     state.meta = meta; state.market = market;
     state.revenueNotes = revenueNotes || {};
-    state.contractLiabilities = contractLiabilities || {stocks:{}};
     state.rows = rows || []; state.tags = tags || {}; state.movers = movers;
     state.history = history;
     if (performance && performance.stocks) state.performance = performance;

@@ -1470,7 +1470,3 @@ body.off-hours { --accent:#087f8c; --accent-2:#27b8ac; --accent-soft:rgba(8,127,
 th[data-k="rev_note"] { cursor: grab; }
 @media(max-width:860px) { .revenue-note { min-width: 0; width: 100%; } }
 
-.contract-liability-cell { min-width: 180px; }
-.contract-cell { text-align: left; line-height: 1.65; white-space: normal; font-size: 13px; }
-.contract-cell small { display: block; color: var(--muted, #777); font-size: 11px; }
-.contract-cell a { color: inherit; text-underline-offset: 3px; }
