@@ -385,10 +385,6 @@ def main() -> int:
     import fetch_prices
     fetch_prices.main()
 
-    # Separate balance-sheet detail collection is resumable and rate limited.
-    import build_contract_liabilities
-    build_contract_liabilities.main(max_requests=80)
-
     log("計算漲幅排行與族群…")
     import build_movers
     build_movers.main()
