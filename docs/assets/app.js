@@ -444,26 +444,18 @@
   }
 
   function renderColumnPicker() {
-    const pool = $("columnPool"), selected = $("selectedColumns");
-    if (!pool || !selected) return;
+    const pool = $("columnPool");
+    if (!pool) return;
     const available = COLS.filter(c => !FIXED_COLUMNS.includes(c.k) && !state.selectedColumns.includes(c.k));
     pool.innerHTML = available.map(c => `<button type="button" class="column-chip" draggable="true" data-column="${c.k}" aria-label="加入${columnLabel(c)}">＋ ${columnLabel(c)}</button>`).join("") || '<span class="column-empty">所有欄位都已加入；拖曳表頭到此處即可移除</span>';
-    selected.innerHTML = state.selectedColumns.map(k => {
-      const c = COLS.find(c => c.k === k);
-      return `<button type="button" class="column-chip is-selected" draggable="true" data-column="${k}" aria-label="移除${columnLabel(c)}">${columnLabel(c)}</button>`;
-    }).join("") || '<span class="column-empty">拖曳上方方塊到這裡，或點方塊加入指標</span>';
-    for (const [zone, remove] of [[pool, true], [selected, false]]) {
-      zone.querySelectorAll("[data-column]").forEach(el => {
-        const key = el.dataset.column;
-        bindColumnDrag(el, key);
-        el.addEventListener("click", () => {
-          changeColumn(key, null, zone === selected);
-          const target = document.querySelector(`#${zone === selected ? "columnPool" : "selectedColumns"} [data-column="${key}"]`);
-          target?.focus();
-        });
-        if (!remove) bindColumnDrop(el, false, key);
+    pool.querySelectorAll("[data-column]").forEach(el => {
+      const key = el.dataset.column;
+      bindColumnDrag(el, key);
+      el.addEventListener("click", () => {
+        changeColumn(key);
+        pool.querySelector("[data-column]")?.focus();
       });
-    }
+    });
   }
 
   // 手機排序選單只放有意義的數值欄位
@@ -638,16 +630,15 @@
     }
   }
   bindColumnDrop($("columnPool"), true);
-  bindColumnDrop($("selectedColumns"));
   bindColumnDrop(scroller);
   // 只有確實放到網頁中、表格外時移除；取消拖曳不影響欄位。
   document.addEventListener("dragover", e => {
-    if (!draggedColumn || e.target.closest(".table-scroll, #selectedColumns")) return;
+    if (!draggedColumn || e.target.closest(".table-scroll")) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
   });
   document.addEventListener("drop", e => {
-    if (!draggedColumn || e.target.closest(".table-scroll, #selectedColumns")) return;
+    if (!draggedColumn || e.target.closest(".table-scroll")) return;
     e.preventDefault();
     const key = draggedColumn;
     draggedColumn = null;
