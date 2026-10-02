@@ -385,6 +385,9 @@ def main() -> int:
     import fetch_prices
     fetch_prices.main()
 
+    import build_profit_growth
+    build_profit_growth.main()
+
     log("計算漲幅排行與族群…")
     import build_movers
     build_movers.main()
