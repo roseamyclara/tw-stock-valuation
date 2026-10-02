@@ -360,7 +360,7 @@
   }
   function profitCell(r) {
     const d = profitRecord(r);
-    if (!d || d.status === "missing") return NA;
+    if (!d || d.status === "missing") return cell(null);
     const basis = d.basis === "parent" ? "歸屬母公司淨利" : "本期稅後淨利";
     const label = d.yoy == null ? esc(d.status) : cell(d.yoy, 1, true);
     return `<span title="${d.year} Q${d.quarter} 年初至今累計，對比去年同期；${basis}">${label}</span><small class="profit-period">${d.year} Q${d.quarter} 累計</small>`;
