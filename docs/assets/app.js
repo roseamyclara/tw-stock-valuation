@@ -34,7 +34,7 @@
   const state = {
     rows: [], view: [], meta: null, market: null, tags: {}, movers: null, history: null,
     tdcc: { date: null, base: null, d: {} },
-    performance: { stocks: {} }, returnPeriod: "d1", revenueNotes: {}, selectedColumns: ["p", "cap", "priceReturn", "pe", "ps", "rev_yoy", "rev_cum", "rev_note"],
+    performance: { stocks: {} }, returnPeriod: "d1", revenueNotes: {}, profitGrowth: {stocks:{}}, selectedColumns: ["p", "cap", "priceReturn", "pe", "ps", "rev_yoy", "rev_cum", "rev_note"],
     // sorts: [{k, dir}]，最多 3 個，陣列順序就是優先序（索引 0 最優先）
     // 空陣列代表沒設任何條件，套用 DEFAULT_SORTS
     sorts: [], filterMarket: "", industry: "", tag: "", q: "",
@@ -353,6 +353,19 @@
     return `<div class="revenue-note"><span>${esc(text)}</span><small>${esc(rev.ym || "")} · 公司申報原文 <a href="${source}" target="_blank" rel="noopener noreferrer">官方來源 ↗</a></small></div>`;
   }
 
+  function profitRecord(r) {
+    const d = state.profitGrowth.stocks[r.c];
+    if (!d || (r.fin && (d.year !== r.fin.y || d.quarter !== r.fin.q))) return null;
+    return d;
+  }
+  function profitCell(r) {
+    const d = profitRecord(r);
+    if (!d || d.status === "missing") return NA;
+    const basis = d.basis === "parent" ? "歸屬母公司淨利" : "本期稅後淨利";
+    const label = d.yoy == null ? esc(d.status) : cell(d.yoy, 1, true);
+    return `<span title="${d.year} Q${d.quarter} 年初至今累計，對比去年同期；${basis}">${label}</span><small class="profit-period">${d.year} Q${d.quarter} 累計</small>`;
+  }
+
   const COLS = [
     { k: "c", t: "代號", cls: "code", get: (r) => r.c },
     { k: "n", t: "名稱", cls: "name-cell", get: (r) => `${esc(r.n)} <span class="mkt">${LABEL[r.m]}</span>` },
@@ -379,7 +392,7 @@
     { k: "rev_yoy", t: "月營收年增%", get: (r) => cell(r.rev && r.rev.yoy, 1, true), val: (r) => r.rev && r.rev.yoy },
     { k: "rev_note", t: "營收變動說明", cls: "revenue-note-cell", get: revenueNote },
     { k: "rev_cum", t: "累計年增%", get: (r) => cell(r.rev && r.rev.cum_yoy, 1, true), val: (r) => r.rev && r.rev.cum_yoy },
-    { k: "net_yoy", t: "淨利年增%", get: (r) => cell(r.fin && r.fin.net_yoy, 1, true), val: (r) => r.fin && r.fin.net_yoy },
+    { k: "net_yoy", t: "淨利年增%", get: profitCell, val: (r) => profitRecord(r)?.yoy ?? null },
     { k: "eps", t: "EPS", get: (r) => cell(r.fin && r.fin.eps), val: (r) => r.fin && r.fin.eps },
     // 籌碼面：集保股權分散表，一張 = 1,000 股，所以「400 張以上」= 400,000 股以上
     { k: "big", t: "大戶持股%", sel: "400張以上大戶持股%", get: (r) => cell(tdccOf(r.c)[0]), val: (r) => tdccOf(r.c)[0] },
@@ -930,7 +943,7 @@
 
   // ---------------------------------------------------------------- 啟動
   (async function init() {
-    const [meta, market, rows, tags, movers, history, tdcc, performance, revenueNotes] = await Promise.all([
+    const [meta, market, rows, tags, movers, history, tdcc, performance, revenueNotes, profitGrowth] = await Promise.all([
       getJSON("data/meta.json", null),
       getJSON("data/market.json", null),
       getJSON("data/latest.json", []),
@@ -940,9 +953,11 @@
       getJSON("data/tdcc.json", null),
       getJSON("data/performance.json", null),
       getJSON("data/revenue_notes.json", {}),
+      getJSON("data/profit_growth.json", {stocks:{}}),
     ]);
     state.meta = meta; state.market = market;
     state.revenueNotes = revenueNotes || {};
+    state.profitGrowth = profitGrowth || {stocks:{}};
     state.rows = rows || []; state.tags = tags || {}; state.movers = movers;
     state.history = history;
     if (performance && performance.stocks) state.performance = performance;

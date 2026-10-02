@@ -1470,3 +1470,5 @@ body.off-hours { --accent:#087f8c; --accent-2:#27b8ac; --accent-soft:rgba(8,127,
 th[data-k="rev_note"] { cursor: grab; }
 @media(max-width:860px) { .revenue-note { min-width: 0; width: 100%; } }
 
+
+.profit-period { display:block; font-size:10px; font-weight:400; color:var(--muted, #777); white-space:nowrap; }
