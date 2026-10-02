@@ -34,7 +34,7 @@
   const state = {
     rows: [], view: [], meta: null, market: null, tags: {}, movers: null, history: null,
     tdcc: { date: null, base: null, d: {} },
-    performance: { stocks: {} }, returnPeriod: "d1", revenueNotes: {}, profitGrowth: {stocks:{}}, selectedColumns: ["p", "cap", "priceReturn", "pe", "ps", "rev_yoy", "rev_cum", "rev_note"],
+    performance: { stocks: {} }, returnPeriod: "d1", revenueNotes: {}, profitGrowth: {stocks:{}}, selectedColumns: ["p", "cap", "priceReturn", "pe", "ps", "rev_yoy", "rev_cum", "net_yoy", "rev_note"],
     // sorts: [{k, dir}]，最多 3 個，陣列順序就是優先序（索引 0 最優先）
     // 空陣列代表沒設任何條件，套用 DEFAULT_SORTS
     sorts: [], filterMarket: "", industry: "", tag: "", q: "",
