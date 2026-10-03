@@ -661,13 +661,13 @@
 
 
   function applyFilters() {
-    const q = state.q.trim().toLowerCase();
+    const terms = state.q.toLowerCase().split(/\s+/u).filter(Boolean);
     let v = state.rows.filter((r) => {
       if (state.filterMarket && r.m !== state.filterMarket) return false;
       if (state.industry && r.i !== state.industry) return false;
       if (state.tag && !tagsOf(r.c).includes(state.tag)) return false;
-      // 搜尋同時比對代號、名稱與業務標籤，所以打「外籍移工」找得到統振
-      if (q && !(r.c.includes(q) || (r.n || "").toLowerCase().includes(q)
+      // 空白分隔的條件採 OR；市場、產業與標籤篩選仍同時適用。
+      if (terms.length && !terms.some(q => r.c.includes(q) || (r.n || "").toLowerCase().includes(q)
                  || tagsOf(r.c).some((t) => t.toLowerCase().includes(q)))) return false;
       return true;
     });
