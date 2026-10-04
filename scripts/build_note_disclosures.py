@@ -435,6 +435,82 @@ def ixbrl_documents(content: bytes) -> list[str]:
     return docs
 
 
+
+def empty_note_values() -> dict[str, int | None]:
+    return {
+        "contractCurrent": None,
+        "contractNoncurrent": None,
+        "contractTotal": None,
+        "customerReceiptsCurrent": None,
+        "customerReceiptsNoncurrent": None,
+        "customerReceiptsTotal": None,
+    }
+
+
+def note_values_present(values: dict[str, int | None]) -> bool:
+    return any(value is not None for value in values.values())
+
+
+def split_period_for_pdf(period: str) -> tuple[int, int]:
+    match = re.fullmatch(r"(\d{4})Q([1-4])", period)
+    if not match:
+        raise ValueError(period)
+    return int(match.group(1)), int(match.group(2))
+
+
+def roc_period_label(period: str) -> tuple[int, str]:
+    year, quarter = split_period_for_pdf(period)
+    label = {1: "第一季", 2: "第二季", 3: "第三季", 4: "第四季"}[quarter]
+    return year - 1911, label
+
+
+def report_filename_from_book_html(html: str, code: str, period: str) -> str | None:
+    roc_year, quarter_label = roc_period_label(period)
+    soup = BeautifulSoup(html, "html.parser")
+    wanted_period = canon(f"{roc_year}年{quarter_label}")
+
+    for row in soup.find_all("tr"):
+        text_value = " ".join(row.stripped_strings)
+        key = canon(text_value)
+        if code not in key or wanted_period not in key:
+            continue
+        if "ifrss合併財報" not in key and "合併財務報告" not in key:
+            continue
+        if "英文" in key or "english" in key:
+            continue
+        match = re.search(r"([A-Za-z0-9_.-]+\.pdf)", str(row), flags=re.I)
+        if match:
+            return match.group(1)
+
+    for row in soup.find_all("tr"):
+        text_value = " ".join(row.stripped_strings)
+        key = canon(text_value)
+        if code not in key or wanted_period not in key or "英文" in key:
+            continue
+        matches = re.findall(r"([A-Za-z0-9_.-]+\.pdf)", str(row), flags=re.I)
+        preferred = [filename for filename in matches if "_A11" in filename.upper()]
+        if len(preferred) == 1:
+            return preferred[0]
+    return None
+
+
+def pdf_amount_multiplier(text: str) -> int:
+    compact = canon(text)
+    if "百萬元" in compact:
+        return 1_000_000
+    if "仟元" in compact or "千元" in compact:
+        return 1_000
+    raise ValueError("財報 PDF 找不到明確的仟元／千元金額單位")
+
+
+def first_money_after_label(text: str, label_start: int, window: int = 420) -> int | None:
+    chunk = text[label_start : label_start + window]
+    match = re.search(r"(?<!\d)(\d{1,3}(?:,\d{3})+)(?!\d)", chunk)
+    if not match:
+        return None
+    return int(match.group(1).replace(",", ""))
+
+
 class NoteClient:
     def __init__(self) -> None:
         self.session = requests.Session()
