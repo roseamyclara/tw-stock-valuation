@@ -789,6 +789,7 @@ def apply_disclosures(
     row: dict[str, Any],
     parsed: dict[str, int | None],
     report_id: str,
+    source: str = "mops_ixbrl",
 ) -> None:
     status = row.setdefault("status", {})
 
@@ -800,7 +801,9 @@ def apply_disclosures(
             row.setdefault(f"{key}Source", "balance_sheet")
         elif note_value is not None:
             row[key] = note_value
-            row[f"{key}Source"] = "ixbrl_notes"
+            row[f"{key}Source"] = (
+                "pdf_notes" if source == "mops_pdf_notes" else "ixbrl_notes"
+            )
             status[key] = "reported_in_notes"
 
     for key in CUSTOMER_RECEIPT_FIELDS:
@@ -812,7 +815,7 @@ def apply_disclosures(
     row["notesChecked"] = True
     row["notesCheckedAt"] = now_taipei().isoformat(timespec="seconds")
     row["notesReportType"] = "consolidated" if report_id == "C" else "standalone"
-    row["notesSource"] = "mops_ixbrl"
+    row["notesSource"] = source
 
 
 def refresh_operating_latest(
@@ -910,7 +913,7 @@ def main() -> int:
     if args.max_requests > 0:
         jobs = jobs[: args.max_requests]
 
-    log(f"iXBRL 附註：本次 {len(jobs)} 份（期間 {periods[0]}～{periods[-1]}）")
+    log(f"財報附註：本次 {len(jobs)} 份（期間 {periods[0]}～{periods[-1]}）")
 
     processed = 0
     for code, period in jobs:
@@ -918,22 +921,34 @@ def main() -> int:
         try:
             content, report_id = client.download(code, period)
             parsed = parse_report(content, period)
-            apply_disclosures(row, parsed, report_id)
+            source = "mops_ixbrl"
+
+            if (
+                parsed.get("contractCurrent") is None
+                or parsed.get("customerReceiptsTotal") is None
+            ):
+                try:
+                    pdf_content, pdf_filename = client.financial_report_pdf(
+                        code, period
+                    )
+                    pdf_values = parse_pdf_report(pdf_content, period)
+                    for key, value in pdf_values.items():
+                        if parsed.get(key) is None and value is not None:
+                            parsed[key] = value
+                    if note_values_present(pdf_values):
+                        source = "mops_pdf_notes"
+                        row["notesPdfFilename"] = pdf_filename
+                except Exception as pdf_exc:  # noqa: BLE001
+                    row["notesPdfError"] = str(pdf_exc)[:240]
+
+            apply_disclosures(row, parsed, report_id, source)
             processed += 1
             if code == "2330":
                 log(
                     f"2330 {period}: 合約負債={parsed.get('contractCurrent') or parsed.get('contractTotal')} "
-                    f"暫收客戶款={parsed.get('customerReceiptsTotal')}"
+                    f"暫收客戶款={parsed.get('customerReceiptsTotal')} "
+                    f"source={source} pdf={row.get('notesPdfFilename')}"
                 )
-                if (
-                    args.require_tsmc
-                    and period == "2026Q2"
-                    and parsed.get("contractCurrent") is None
-                    and parsed.get("contractTotal") is None
-                ):
-                    for doc in ixbrl_documents(content):
-                        for line in debug_ixbrl_html(doc, period):
-                            log(line)
         except Exception as exc:  # noqa: BLE001
             row["notesChecked"] = True
             row["notesCheckedAt"] = now_taipei().isoformat(timespec="seconds")
@@ -971,7 +986,7 @@ def main() -> int:
         if errors:
             raise ValueError("台積電附註驗證失敗：\n" + "\n".join(errors))
 
-    log(f"iXBRL 附註完成：{processed}/{len(jobs)}")
+    log(f"財報附註完成：{processed}/{len(jobs)}")
     return 0
 
 
