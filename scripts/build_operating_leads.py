@@ -641,6 +641,8 @@ def merge_balance_sheet(
             "inventory",
         ):
             row[key] = item.get(key)
+            if key.startswith("contract") and item.get(key) is not None:
+                row[f"{key}Source"] = "balance_sheet"
         row["balanceSheetBasis"] = "financial_statement"
         status = row.setdefault("status", {})
         status.update(item.get("status") or {})
@@ -709,6 +711,7 @@ def build_latest(
         total_period = newest(periods, "contractTotal")
         inventory_period = newest(periods, "inventory")
         revenue_period = newest(periods, "revenue")
+        customer_receipts_period = newest(periods, "customerReceiptsTotal")
 
         stocks[code] = {
             "n": stock.get("n"),
@@ -750,6 +753,30 @@ def build_latest(
             "revenueChange": change(
                 periods, revenue_period, "revenue"
             ),
+            "customerReceiptsPeriod": customer_receipts_period,
+            "customerReceiptsTotal": (
+                (periods.get(customer_receipts_period) or {}).get("customerReceiptsTotal")
+                if customer_receipts_period
+                else None
+            ),
+            "customerReceiptsCurrent": (
+                (periods.get(customer_receipts_period) or {}).get("customerReceiptsCurrent")
+                if customer_receipts_period
+                else None
+            ),
+            "customerReceiptsNoncurrent": (
+                (periods.get(customer_receipts_period) or {}).get("customerReceiptsNoncurrent")
+                if customer_receipts_period
+                else None
+            ),
+            "customerReceiptsChange": change(
+                periods, customer_receipts_period, "customerReceiptsTotal"
+            ),
+            "contractCurrentSource": (
+                (periods.get(contract_period) or {}).get("contractCurrentSource")
+                if contract_period
+                else None
+            ),
         }
 
     return {
@@ -761,8 +788,12 @@ def build_latest(
         },
         "notes": {
             "contract": (
-                "預設使用合約負債－流動；總合約負債只在公司明列總額，"
-                "或流動與非流動皆有明確數值時提供。"
+                "預設使用合約負債－流動。若資產負債表主表未單獨列示，"
+                "會再以官方 iXBRL 財報附註補充；主表與附註來源會分開標記。"
+            ),
+            "customerReceipts": (
+                "暫收客戶款／客戶預收款為獨立先行指標，與合約負債分開保存，"
+                "不會相加或混為同一科目。"
             ),
             "missing": (
                 "null 代表未單獨揭露、不適用或該期沒有資料，不會改寫為 0。"
