@@ -839,7 +839,7 @@
       const [period, value] = latestOpValue(field);
       const row = period ? (opPeriods[period] || {}) : {};
       const source = sourceField && row[sourceField]
-        ? (row[sourceField] === "ixbrl_notes" ? " · 附註" : row[sourceField] === "balance_sheet" ? " · 主表" : "")
+        ? (["ixbrl_notes", "pdf_notes"].includes(row[sourceField]) ? " · 附註" : row[sourceField] === "balance_sheet" ? " · 主表" : "")
         : "";
       return `<div class="op-kpi"><div class="k">${title}</div><div class="v">${value == null ? "—" : human(value)}</div><div class="op-sub">${period || "尚無資料"}${source} · YoY ${period ? (cell(opDelta(period, field, "yoy"), 1, true)) : "—"}</div></div>`;
     };
