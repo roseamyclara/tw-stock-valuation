@@ -682,7 +682,7 @@ class NoteClient:
             "queryName": "co_id",
             "inpuType": "co_id",
             "co_id": code,
-            "year": str(year - 1911),
+            "year": str(year),
         }
 
         self.wait()
