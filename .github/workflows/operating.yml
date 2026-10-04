@@ -96,7 +96,7 @@ jobs:
           python build_operating_leads.py --years 1 --codes 2330
           python build_note_disclosures.py --codes 2330 --years 1 --max-requests 4 --require-tsmc
 
-      # push / schedule / workflow_dispatch 才是真正的資料發布流程。
+      # 開發分支只跑已知基準個股，快速驗證解析器；main 才做全市場正式資料。
       - name: 更新合約負債、存貨與營收
         if: github.event_name != 'pull_request'
         working-directory: scripts
@@ -104,7 +104,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.full_backfill }}" == "true" ]]; then
+          if [[ "${{ github.ref }}" == "refs/heads/feature/operating-leads-v2" ]]; then
+            echo "功能分支 smoke：只抓 4563、2330"
+            python build_operating_leads.py --years 2 --codes 4563,2330
+
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.full_backfill }}" == "true" ]]; then
             echo "手動完整回補 ${{ github.event.inputs.years || '5' }} 年"
             python build_operating_leads.py --years "${{ github.event.inputs.years || '5' }}"
 
@@ -124,13 +128,17 @@ jobs:
         run: |
           set -euo pipefail
 
-          # 台積電是已知「主表不單列合約負債、附註才揭露」的基準案例。
-          # 先回補台積電近 5 年，確保個股圖不只有最新一點。
-          python build_note_disclosures.py --codes 2330 --years 5 --max-requests 20 --require-tsmc
+          if [[ "${{ github.ref }}" == "refs/heads/feature/operating-leads-v2" ]]; then
+            # 開發時立即驗證台積電附註，不等待全市場。
+            python build_note_disclosures.py --codes 2330 --years 1 --max-requests 4 --require-tsmc
+          else
+            # 台積電是已知「主表不單列合約負債、附註才揭露」的基準案例。
+            # 先回補近 5 年，確保個股圖不只有最新一點。
+            python build_note_disclosures.py --codes 2330 --years 5 --max-requests 20 --require-tsmc
 
-          # 其餘公司採漸進式補抓最新財報季。notesChecked 會寫回個股 JSON，
-          # 下週自動從尚未檢查的公司繼續，不會反覆重抓同一份財報。
-          python build_note_disclosures.py --max-requests 120
+            # 其餘公司漸進補抓最新財報季；notesChecked 會避免反覆重抓。
+            python build_note_disclosures.py --max-requests 120
+          fi
 
       - name: 驗證最新資料已包含應有季度
         if: github.event_name != 'pull_request'
@@ -167,7 +175,7 @@ jobs:
           PY
 
       - name: commit 營運資料
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         shell: bash
         run: |
           set -euo pipefail
