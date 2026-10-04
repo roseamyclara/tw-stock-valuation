@@ -559,6 +559,16 @@ def parse_revenue_payload(
                 None if value is None else int(round(value * multiplier))
             )
 
+    if "4563" in batch and not any(
+        value is not None for value in result.get("4563", {}).values()
+    ):
+        log(
+            "[4563 revenue debug] "
+            f"message={payload.get('message')!r} "
+            f"qnumber={payload.get('qnumber')!r} "
+            f"json={payload.get('json')!r} "
+            f"graphData={payload.get('graphData')!r}"
+        )
     return result
 
 
