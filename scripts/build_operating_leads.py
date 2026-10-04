@@ -207,9 +207,61 @@ class Http:
                 last_error = exc
         raise RuntimeError(f"{path} 重試後仍失敗：{last_error}")
 
+    def get(self, path: str = "/", tries: int = 4) -> requests.Response:
+        last_error: Exception | None = None
+        for attempt in range(tries):
+            if attempt:
+                time.sleep(min(20.0, 2.0**attempt))
+            self._wait()
+            try:
+                response = self.session.get(
+                    BASE + path,
+                    timeout=45,
+                    headers={
+                        "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+                        "Referer": BASE + "/",
+                    },
+                )
+                if response.status_code == 200:
+                    return response
+                last_error = RuntimeError(f"HTTP {response.status_code}")
+            except requests.RequestException as exc:
+                last_error = exc
+        raise RuntimeError(f"GET {path} 重試後仍失敗：{last_error}")
+
 
 def display_name(code: str, meta: dict[str, dict[str, Any]]) -> str:
     return f"{code} {meta[code].get('n') or ''}".strip()
+
+
+def parse_metric_codes(html: str) -> dict[str, str]:
+    """Discover current Mopsfin metric codes from the official catalog page."""
+    soup = BeautifulSoup(html, "html.parser")
+    found: dict[str, str] = {}
+    for anchor in soup.select("a.compareClass[name]"):
+        code = str(anchor.get("name") or "").strip()
+        name = " ".join(anchor.stripped_strings).replace("●", "").strip()
+        classes = set(anchor.get("class") or [])
+        if not code or not name:
+            continue
+        if "資產負債表" in name and "companyClass" in classes:
+            found["balance_sheet"] = code
+        if name == "營業收入" and "ystClass" in classes:
+            found["revenue"] = code
+    return found
+
+
+def discover_metric_codes(http: Http) -> dict[str, str]:
+    metrics = parse_metric_codes(http.get("/").text)
+    missing = [key for key in ("balance_sheet", "revenue") if key not in metrics]
+    if missing:
+        raise ValueError(f"Mopsfin 目錄缺少必要指標：{missing}")
+    log(
+        "Mopsfin 指標："
+        f"資產負債表={metrics['balance_sheet']} "
+        f"營業收入={metrics['revenue']}"
+    )
+    return metrics
 
 
 def common_fields(metric: str, unit: str) -> list[tuple[str, str]]:
@@ -427,8 +479,9 @@ def fetch_balance_sheet(
     period: str,
     batch: list[str],
     meta: dict[str, dict[str, Any]],
+    metric_code: str,
 ) -> dict[str, dict[str, Any]]:
-    fields = common_fields("BalanceSheet", "新台幣仟元")
+    fields = common_fields(metric_code, "新台幣仟元")
     fields = [
         (key, period.replace("Q", "") if key == "ys" else value)
         for key, value in fields
@@ -498,27 +551,16 @@ def parse_revenue_payload(
                 None if value is None else int(round(value * multiplier))
             )
 
-    if "4563" in batch and not any(
-        value is not None for value in result.get("4563", {}).values()
-    ):
-        log(
-            "[4563 revenue debug] "
-            f"keys={list(payload.keys())!r} "
-            f"periods={periods[-12:]!r} "
-            f"checked={checked!r} shown={shown!r} displayed={displayed!r} "
-            f"graph_labels={[str(x.get('label')) for x in (payload.get('graphData') or [])]!r}"
-        )
-        log(
-            "[4563 revenue debug] graph_sample="
-            f"{(payload.get('graphData') or [])[:3]!r}"
-        )
     return result
 
 
 def fetch_revenue(
-    http: Http, batch: list[str], meta: dict[str, dict[str, Any]]
+    http: Http,
+    batch: list[str],
+    meta: dict[str, dict[str, Any]],
+    metric_code: str,
 ) -> dict[str, dict[str, int | None]]:
-    fields = common_fields("OperatingRevenue", "新台幣仟元")
+    fields = common_fields(metric_code, "新台幣仟元")
     fields.extend(("companyId", display_name(code, meta)) for code in batch)
     response = http.post("/compare/data", fields)
     try:
@@ -796,6 +838,7 @@ def main() -> int:
     codes = sorted(meta)
     docs = load_docs(codes)
     http = Http()
+    metric_codes = discover_metric_codes(http)
 
     latest_period = latest_completed_period(now_taipei().date())
     all_periods = periods_for(max(1, args.years), latest_period)
@@ -816,7 +859,7 @@ def main() -> int:
             merge_revenue(
                 docs,
                 meta,
-                fetch_revenue(http, batch, meta),
+                fetch_revenue(http, batch, meta, metric_codes["revenue"]),
                 allowed_periods,
             )
         except Exception as exc:  # noqa: BLE001
@@ -831,7 +874,7 @@ def main() -> int:
                 break
             try:
                 parsed = fetch_balance_sheet(
-                    http, period, batch, meta
+                    http, period, batch, meta, metric_codes["balance_sheet"]
                 )
                 merge_balance_sheet(
                     docs, meta, period, parsed
