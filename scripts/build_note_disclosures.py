@@ -263,9 +263,21 @@ def parse_ixbrl_html(html: str, period: str) -> dict[str, int | None]:
         context = previous_context(table)
         context_contract = is_contract_text(context)
         context_customer = is_customer_receipt_text(context)
+        section_kind: str | None = (
+            "customer" if context_customer else "contract" if context_contract else None
+        )
 
         for row in table.find_all("tr"):
             row_text = " ".join(row.stripped_strings)
+
+            # Some iXBRL renderers put the note-section heading in a table row
+            # immediately before the numeric rows. Track that section even if
+            # the heading row itself has no ix:nonFraction facts.
+            if is_customer_receipt_text(row_text):
+                section_kind = "customer"
+            elif is_contract_text(row_text) and not is_customer_receipt_text(row_text):
+                section_kind = "contract"
+
             facts = row.find_all(is_ix_number)
             if not facts:
                 continue
@@ -281,9 +293,12 @@ def parse_ixbrl_html(html: str, period: str) -> dict[str, int | None]:
                 or is_customer_receipt_text(fact_names)
             )
 
+            row_contract_context = context_contract or section_kind == "contract"
+            row_customer_context = context_customer or section_kind == "customer"
+
             # Contract-liability note row.
             if direct_contract or (
-                context_contract
+                row_contract_context
                 and any(x in canon(row_text) for x in ("流動", "current", "合計", "total"))
             ):
                 liq = liquidity(row_text + " " + fact_names)
@@ -299,7 +314,7 @@ def parse_ixbrl_html(html: str, period: str) -> dict[str, int | None]:
             # Rows such as "Current portion" rely on the immediately preceding
             # note-section heading to establish that they belong to customer receipts.
             if direct_customer or (
-                context_customer
+                row_customer_context
                 and any(
                     token in canon(row_text)
                     for token in ("流動", "current", "非流動", "noncurrent", "合計", "total")
