@@ -499,7 +499,9 @@
 
   // 手機排序選單只放有意義的數值欄位
   const SORTABLE = ["priceReturn", "fromLow52", "fromHigh52", "cap", "p", "pe", "ps", "pb", "dy", "rev_yoy", "rev_cum",
-                    "contract", "contract_qoq", "contract_yoy", "inventory", "inventory_qoq", "inventory_yoy",
+                    "contract", "contract_qoq", "contract_yoy",
+                    "customer_receipts", "customer_receipts_qoq", "customer_receipts_yoy",
+                    "inventory", "inventory_qoq", "inventory_yoy",
                     "qrev", "qrev_qoq", "qrev_yoy", "net_yoy", "eps", "big", "big_chg"];
 
   // ------------------------------------------------------------ 多欄排序
