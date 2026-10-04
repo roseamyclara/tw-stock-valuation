@@ -497,6 +497,21 @@ def parse_revenue_payload(
             result[code][periods[index]] = (
                 None if value is None else int(round(value * multiplier))
             )
+
+    if "4563" in batch and not any(
+        value is not None for value in result.get("4563", {}).values()
+    ):
+        log(
+            "[4563 revenue debug] "
+            f"keys={list(payload.keys())!r} "
+            f"periods={periods[-12:]!r} "
+            f"checked={checked!r} shown={shown!r} displayed={displayed!r} "
+            f"graph_labels={[str(x.get('label')) for x in (payload.get('graphData') or [])]!r}"
+        )
+        log(
+            "[4563 revenue debug] graph_sample="
+            f"{(payload.get('graphData') or [])[:3]!r}"
+        )
     return result
 
 
