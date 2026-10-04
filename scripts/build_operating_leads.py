@@ -332,19 +332,28 @@ def parse_balance_sheet(
         for code in columns.values():
             out[code]["companyReturned"] = True
 
+        first_value_column = min(columns)
         for row in grid[header_end + 1 :]:
             if not row:
                 continue
-            label = account_label(row[0])
             key: str | None = None
-            if label in CURRENT_NAMES:
-                key = "contractCurrent"
-            elif label in NONCURRENT_NAMES:
-                key = "contractNoncurrent"
-            elif label in TOTAL_NAMES:
-                key = "contractTotal"
-            elif label in INVENTORY_NAMES:
-                key = "inventory"
+            # Mopsfin may put an account code (e.g. 2130) before the account
+            # name. Search every descriptive column before the first company
+            # value instead of assuming the label is row[0].
+            for raw_label in row[:first_value_column]:
+                label = account_label(raw_label)
+                if label in CURRENT_NAMES:
+                    key = "contractCurrent"
+                    break
+                if label in NONCURRENT_NAMES:
+                    key = "contractNoncurrent"
+                    break
+                if label in TOTAL_NAMES:
+                    key = "contractTotal"
+                    break
+                if label in INVENTORY_NAMES:
+                    key = "inventory"
+                    break
             if key is None:
                 continue
             for col_index, code in columns.items():
