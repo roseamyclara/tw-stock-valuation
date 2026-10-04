@@ -652,6 +652,83 @@ class NoteClient:
             time.sleep(REQUEST_GAP - elapsed)
         self.last_hit = time.monotonic()
 
+    def financial_report_pdf(self, code: str, period: str) -> tuple[bytes, str]:
+        year, _quarter = split_period_for_pdf(period)
+        form = {
+            "encodeURIComponent": "1",
+            "step": "1",
+            "firstin": "ture",
+            "off": "1",
+            "TYPEK": "all",
+            "keyword4": "",
+            "code1": "",
+            "TYPEK2": "",
+            "checkbtn": "",
+            "queryName": "co_id",
+            "inpuType": "co_id",
+            "co_id": code,
+            "year": str(year - 1911),
+        }
+
+        self.wait()
+        response = self.session.post(
+            BOOK_QUERY,
+            data=form,
+            timeout=45,
+            headers={
+                "Accept": "text/html,*/*;q=0.8",
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Origin": MOPSOV,
+                "Referer": BOOK_PAGE,
+            },
+        )
+        response.raise_for_status()
+        match = re.search(r"window\.open\('([^']+)'", response.text)
+        if not match:
+            raise ValueError("MOPS 電子書查詢沒有回傳文件清單")
+        report_url = urljoin(
+            MOPSOV,
+            match.group(1).replace("&amp;", "&"),
+        )
+
+        self.wait()
+        listing = self.session.get(
+            report_url,
+            timeout=45,
+            headers={
+                "Accept": "text/html,*/*;q=0.8",
+                "Referer": BOOK_PAGE,
+            },
+        )
+        listing.raise_for_status()
+        html = listing.content.decode("big5", errors="replace")
+        filename = report_filename_from_book_html(html, code, period)
+        if not filename:
+            raise ValueError(f"{code} {period} 找不到 IFRSs 中文合併財報 PDF")
+
+        pdf_url = DOC_DOWNLOAD + "?" + urlencode(
+            {
+                "step": 9,
+                "kind": "A",
+                "co_id": code,
+                "filename": filename,
+            }
+        )
+        self.wait()
+        pdf = self.session.get(
+            pdf_url,
+            timeout=90,
+            allow_redirects=True,
+            headers={
+                "Accept": "application/pdf,*/*;q=0.8",
+                "Referer": report_url,
+            },
+        )
+        pdf.raise_for_status()
+        if not pdf.content.startswith(b"%PDF"):
+            raise ValueError(f"{code} {period} 電子書不是 PDF")
+        return pdf.content, filename
+
     def download(self, code: str, period: str) -> tuple[bytes, str]:
         year, quarter = period.split("Q")
         last_error: Exception | None = None
