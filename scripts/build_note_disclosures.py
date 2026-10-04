@@ -27,6 +27,8 @@ from typing import Any
 
 import requests
 from bs4 import BeautifulSoup
+from pypdf import PdfReader
+from urllib.parse import urlencode, urljoin
 
 from build_operating_leads import (
     DATA_DIR,
@@ -52,6 +54,9 @@ DOWNLOAD_URL = (
 )
 REQUEST_GAP = 1.0
 UA = "tw-stock-valuation/note-disclosures (+https://roseamyclara.github.io/tw-stock-valuation/)"
+BOOK_QUERY = MOPSOV + "/mops/web/ajax_t57sb01_q1"
+BOOK_PAGE = MOPSOV + "/mops/web/t57sb01_q1"
+DOC_DOWNLOAD = "https://doc.twse.com.tw/server-java/t57sb01"
 
 CUSTOMER_RECEIPT_FIELDS = (
     "customerReceiptsCurrent",
