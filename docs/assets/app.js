@@ -34,7 +34,7 @@
   const state = {
     rows: [], view: [], meta: null, market: null, tags: {}, movers: null, history: null,
     tdcc: { date: null, base: null, d: {} },
-    performance: { stocks: {} }, returnPeriod: "d1", revenueNotes: {}, profitGrowth: {stocks:{}}, operating: {stocks:{}}, selectedColumns: ["p", "cap", "priceReturn", "pe", "ps", "rev_yoy", "rev_cum", "contract_yoy", "inventory_yoy", "qrev_yoy", "net_yoy", "rev_note"],
+    performance: { stocks: {} }, returnPeriod: "d1", revenueNotes: {}, profitGrowth: {stocks:{}}, operating: {stocks:{}}, selectedColumns: ["p", "cap", "priceReturn", "pe", "ps", "rev_yoy", "rev_cum", "contract_yoy", "customer_receipts_yoy", "inventory_yoy", "qrev_yoy", "net_yoy", "rev_note"],
     // sorts: [{k, dir}]，最多 3 個，陣列順序就是優先序（索引 0 最優先）
     // 空陣列代表沒設任何條件，套用 DEFAULT_SORTS
     sorts: [], filterMarket: "", industry: "", tag: "", q: "",
@@ -409,6 +409,9 @@
     { k: "contract", t: "合約負債", sel: "合約負債－流動", get: (r) => operatingAmountCell(r, "contractCurrent", "contractCurrentPeriod"), val: (r) => operatingOf(r.c).contractCurrent ?? null },
     { k: "contract_qoq", t: "合約負債QoQ%", get: (r) => operatingChangeCell(r, "contractCurrentChange", "qoq"), val: (r) => operatingChangeValue(r, "contractCurrentChange", "qoq") },
     { k: "contract_yoy", t: "合約負債YoY%", get: (r) => operatingChangeCell(r, "contractCurrentChange", "yoy"), val: (r) => operatingChangeValue(r, "contractCurrentChange", "yoy") },
+    { k: "customer_receipts", t: "客戶預收／暫收", sel: "暫收客戶款／客戶預收款", get: (r) => operatingAmountCell(r, "customerReceiptsTotal", "customerReceiptsPeriod"), val: (r) => operatingOf(r.c).customerReceiptsTotal ?? null },
+    { k: "customer_receipts_qoq", t: "客戶預收QoQ%", get: (r) => operatingChangeCell(r, "customerReceiptsChange", "qoq"), val: (r) => operatingChangeValue(r, "customerReceiptsChange", "qoq") },
+    { k: "customer_receipts_yoy", t: "客戶預收YoY%", get: (r) => operatingChangeCell(r, "customerReceiptsChange", "yoy"), val: (r) => operatingChangeValue(r, "customerReceiptsChange", "yoy") },
     { k: "inventory", t: "存貨", get: (r) => operatingAmountCell(r, "inventory", "inventoryPeriod"), val: (r) => operatingOf(r.c).inventory ?? null },
     { k: "inventory_qoq", t: "存貨QoQ%", get: (r) => operatingChangeCell(r, "inventoryChange", "qoq"), val: (r) => operatingChangeValue(r, "inventoryChange", "qoq") },
     { k: "inventory_yoy", t: "存貨YoY%", get: (r) => operatingChangeCell(r, "inventoryChange", "yoy"), val: (r) => operatingChangeValue(r, "inventoryChange", "yoy") },
@@ -830,9 +833,13 @@
       const period = [...opLabels].reverse().find(p => opPeriods[p] && opPeriods[p][field] != null);
       return period ? [period, opPeriods[period][field]] : [null, null];
     };
-    const opSummaryBox = (title, field) => {
+    const opSummaryBox = (title, field, sourceField = null) => {
       const [period, value] = latestOpValue(field);
-      return `<div class="op-kpi"><div class="k">${title}</div><div class="v">${value == null ? "—" : human(value)}</div><div class="op-sub">${period || "尚無資料"} · YoY ${period ? (cell(opDelta(period, field, "yoy"), 1, true)) : "—"}</div></div>`;
+      const row = period ? (opPeriods[period] || {}) : {};
+      const source = sourceField && row[sourceField]
+        ? (row[sourceField] === "ixbrl_notes" ? " · 附註" : row[sourceField] === "balance_sheet" ? " · 主表" : "")
+        : "";
+      return `<div class="op-kpi"><div class="k">${title}</div><div class="v">${value == null ? "—" : human(value)}</div><div class="op-sub">${period || "尚無資料"}${source} · YoY ${period ? (cell(opDelta(period, field, "yoy"), 1, true)) : "—"}</div></div>`;
     };
 
     const ov = document.createElement("div");
@@ -880,9 +887,10 @@
         <div><div class="k">營益年增%</div><div class="v">${cell(fin.op_yoy, 1, true)}</div></div>
       </div>
       <h4>營運先行指標</h4>
-      <p class="note">合約負債預設顯示流動項目；未單獨揭露或不適用時保留空白，不以 0 代替。興櫃依實際申報期別顯示。</p>
+      <p class="note">合約負債先讀資產負債表主表；主表未單獨列示時，再讀官方 iXBRL 財報附註。暫收客戶款／客戶預收款是另一種負債，獨立顯示，不與合約負債相加。缺值維持空白，不以 0 代替。</p>
       <div class="op-summary">
-        ${opSummaryBox("合約負債－流動", "contractCurrent")}
+        ${opSummaryBox("合約負債－流動", "contractCurrent", "contractCurrentSource")}
+        ${opSummaryBox("暫收客戶款／客戶預收款", "customerReceiptsTotal")}
         ${opSummaryBox("存貨", "inventory")}
         ${opSummaryBox("財報期營收", "revenue")}
       </div>
@@ -892,11 +900,12 @@
         <button type="button" data-op-mode="yoy" aria-pressed="false">YoY</button>
       </div>
       <div class="card op-normalized">
-        <div class="op-chart-head"><strong>三項指標比較</strong><span>共同可比期＝100</span></div>
-        <div class="chart-wrap"><div class="chart-scroll"><svg class="chart" id="opCompareChart" role="img" aria-label="合約負債、存貨、營收標準化比較"></svg></div><div class="tooltip" id="opCompareTip" hidden></div></div>
+        <div class="op-chart-head"><strong>四項指標比較</strong><span>各系列首個可用期＝100</span></div>
+        <div class="chart-wrap"><div class="chart-scroll"><svg class="chart" id="opCompareChart" role="img" aria-label="合約負債、客戶預收暫收、存貨、營收標準化比較"></svg></div><div class="tooltip" id="opCompareTip" hidden></div></div>
       </div>
       <div class="op-chart-grid">
         <div class="card"><div class="op-chart-head"><strong>合約負債－流動</strong><span id="opContractUnit">億元</span></div><div class="chart-wrap"><div class="chart-scroll"><svg class="chart" id="opContractChart"></svg></div><div class="tooltip" id="opContractTip" hidden></div></div></div>
+        <div class="card"><div class="op-chart-head"><strong>暫收客戶款／客戶預收款</strong><span id="opCustomerUnit">億元</span></div><div class="chart-wrap"><div class="chart-scroll"><svg class="chart" id="opCustomerChart"></svg></div><div class="tooltip" id="opCustomerTip" hidden></div></div></div>
         <div class="card"><div class="op-chart-head"><strong>存貨</strong><span id="opInventoryUnit">億元</span></div><div class="chart-wrap"><div class="chart-scroll"><svg class="chart" id="opInventoryChart"></svg></div><div class="tooltip" id="opInventoryTip" hidden></div></div></div>
         <div class="card"><div class="op-chart-head"><strong>財報期營收</strong><span id="opRevenueUnit">億元</span></div><div class="chart-wrap"><div class="chart-scroll"><svg class="chart" id="opRevenueChart"></svg></div><div class="tooltip" id="opRevenueTip" hidden></div></div></div>
       </div>
@@ -926,14 +935,12 @@
       return [period, opDelta(period, field, mode)];
     });
 
-    const commonBase = opLabels.find(period =>
-      ["contractCurrent", "inventory", "revenue"].every(field =>
-        opPeriods[period] && opPeriods[period][field] != null));
     const normalized = (field) => {
-      if (!commonBase) return [];
-      const baseValue = opPeriods[commonBase][field];
+      const basePeriod = opLabels.find(period => opPeriods[period] && opPeriods[period][field] != null && opPeriods[period][field] !== 0);
+      if (!basePeriod) return [];
+      const baseValue = opPeriods[basePeriod][field];
       return opLabels
-        .filter(period => period >= commonBase)
+        .filter(period => period >= basePeriod)
         .map(period => {
           const value = opPeriods[period] && opPeriods[period][field];
           return [period, value == null ? null : value / baseValue * 100];
@@ -945,6 +952,7 @@
       const allowNegative = !amount;
       const fields = [
         ["contractCurrent", "#opContractChart", "#opContractTip", "#opContractUnit", "合約負債", "var(--accent)"],
+        ["customerReceiptsTotal", "#opCustomerChart", "#opCustomerTip", "#opCustomerUnit", "暫收客戶款／客戶預收款", "var(--series-1)"],
         ["inventory", "#opInventoryChart", "#opInventoryTip", "#opInventoryUnit", "存貨", "var(--series-2)"],
         ["revenue", "#opRevenueChart", "#opRevenueTip", "#opRevenueUnit", "營收", "var(--series-3)"],
       ];
@@ -963,11 +971,12 @@
     lineChart(
       ov.querySelector("#opCompareChart"),
       ov.querySelector("#opCompareTip"),
-      commonBase ? [
+      [
         { key: "contract", name: "合約負債", color: "var(--accent)", points: normalized("contractCurrent") },
+        { key: "customer", name: "客戶預收／暫收", color: "var(--series-1)", points: normalized("customerReceiptsTotal") },
         { key: "inventory", name: "存貨", color: "var(--series-2)", points: normalized("inventory") },
         { key: "revenue", name: "營收", color: "var(--series-3)", points: normalized("revenue") },
-      ] : [],
+      ],
       { unit: "", height: MOBILE.matches ? 220 : 250 }
     );
     renderOperating("amount");
