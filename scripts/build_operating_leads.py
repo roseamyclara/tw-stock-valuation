@@ -235,27 +235,35 @@ def display_name(code: str, meta: dict[str, dict[str, Any]]) -> str:
 
 
 def parse_metric_codes(html: str) -> dict[str, str]:
-    """Discover current Mopsfin metric codes from the official catalog page."""
+    """Discover current Mopsfin metric codes from visible catalog labels."""
     soup = BeautifulSoup(html, "html.parser")
     found: dict[str, str] = {}
-    for anchor in soup.select("a.compareClass[name]"):
-        code = str(anchor.get("name") or "").strip()
-        name = " ".join(anchor.stripped_strings).replace("●", "").strip()
-        classes = set(anchor.get("class") or [])
+    for element in soup.select("[name]"):
+        code = str(element.get("name") or "").strip()
+        name = " ".join(element.stripped_strings).replace("●", "").strip()
         if not code or not name:
             continue
-        if "資產負債表" in name and "companyClass" in classes:
+        if name == "資產負債表":
             found["balance_sheet"] = code
-        if name == "營業收入" and "ystClass" in classes:
+        elif name == "營業收入":
             found["revenue"] = code
     return found
 
 
 def discover_metric_codes(http: Http) -> dict[str, str]:
-    metrics = parse_metric_codes(http.get("/").text)
-    missing = [key for key in ("balance_sheet", "revenue") if key not in metrics]
-    if missing:
-        raise ValueError(f"Mopsfin 目錄缺少必要指標：{missing}")
+    # These are the current official codes. Catalog discovery is preferred so a
+    # future rename does not silently break the collector; fallback codes are
+    # kept because some Mopsfin responses render the visible menu without the
+    # name attributes used by the comparison POST endpoints.
+    metrics = {
+        "balance_sheet": "BalanceSheet",
+        "revenue": "Revenue",
+    }
+    try:
+        discovered = parse_metric_codes(http.get("/").text)
+        metrics.update(discovered)
+    except Exception as exc:  # noqa: BLE001
+        log(f"[Mopsfin catalog] 使用已驗證 fallback：{exc}")
     log(
         "Mopsfin 指標："
         f"資產負債表={metrics['balance_sheet']} "
