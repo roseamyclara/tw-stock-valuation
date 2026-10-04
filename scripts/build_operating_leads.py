@@ -309,8 +309,71 @@ def parse_balance_sheet(
         out[code][key] = int(round(value * multiplier))
         out[code]["status"][key] = "reported"
 
-    for table in soup.find_all("table"):
-        grid = expand_table(table)
+    def field_from_cells(cells: list[str]) -> str | None:
+        for raw_label in cells:
+            label = account_label(raw_label)
+            if label in CURRENT_NAMES:
+                return "contractCurrent"
+            if label in NONCURRENT_NAMES:
+                return "contractNoncurrent"
+            if label in TOTAL_NAMES:
+                return "contractTotal"
+            if label in INVENTORY_NAMES:
+                return "inventory"
+        return None
+
+    # The live E-Point balance sheet uses two synchronized HTML tables:
+    # a frozen left table containing account names and a scrollable right table
+    # containing company headers + values. Their row indices are aligned.
+    tables = soup.find_all("table")
+    grids = [expand_table(table) for table in tables]
+
+    label_grids: list[list[list[str]]] = []
+    value_grids: list[tuple[list[list[str]], dict[int, str]]] = []
+    for grid in grids:
+        if not grid:
+            continue
+        account_hits = sum(1 for row in grid if field_from_cells(row[:3]) is not None)
+        if account_hits:
+            label_grids.append(grid)
+
+        columns: dict[int, str] = {}
+        for row in grid[:6]:
+            for col_index, cell in enumerate(row):
+                code = code_in_text(cell, codes)
+                if code:
+                    columns[col_index] = code
+        if columns:
+            value_grids.append((grid, columns))
+
+    used_split_pair = False
+    for label_grid in label_grids:
+        for value_grid, columns in value_grids:
+            # Real Mopsfin split tables have equal row counts. Tolerate one
+            # decorative row difference but never align unrelated tables.
+            if abs(len(label_grid) - len(value_grid)) > 1:
+                continue
+            limit = min(len(label_grid), len(value_grid))
+            matched_fields = 0
+            for row_index in range(limit):
+                key = field_from_cells(label_grid[row_index][:3])
+                if key is None:
+                    continue
+                matched_fields += 1
+                value_row = value_grid[row_index]
+                for col_index, code in columns.items():
+                    if col_index < len(value_row):
+                        assign(code, key, value_row[col_index])
+                        out[code]["companyReturned"] = True
+            if matched_fields:
+                used_split_pair = True
+                break
+        if used_split_pair:
+            break
+
+    # Fallback for the conventional single-table layout used by some
+    # responses and by our parser fixtures.
+    for grid in grids:
         if not grid:
             continue
 
@@ -336,24 +399,10 @@ def parse_balance_sheet(
         for row in grid[header_end + 1 :]:
             if not row:
                 continue
-            key: str | None = None
             # Mopsfin may put an account code (e.g. 2130) before the account
             # name. Search every descriptive column before the first company
             # value instead of assuming the label is row[0].
-            for raw_label in row[:first_value_column]:
-                label = account_label(raw_label)
-                if label in CURRENT_NAMES:
-                    key = "contractCurrent"
-                    break
-                if label in NONCURRENT_NAMES:
-                    key = "contractNoncurrent"
-                    break
-                if label in TOTAL_NAMES:
-                    key = "contractTotal"
-                    break
-                if label in INVENTORY_NAMES:
-                    key = "inventory"
-                    break
+            key = field_from_cells(row[:first_value_column])
             if key is None:
                 continue
             for col_index, code in columns.items():
@@ -370,25 +419,6 @@ def parse_balance_sheet(
             item["contractTotal"] = item["contractCurrent"] + item["contractNoncurrent"]
             status["contractTotal"] = "calculated"
 
-    # Temporary live-contract diagnostic for the regression benchmark. This is
-    # intentionally limited to 4563 so an upstream layout change does not flood
-    # full-market logs.
-    if "4563" in codes:
-        benchmark = out["4563"]
-        if benchmark["contractCurrent"] is None or benchmark["inventory"] is None:
-            tables = soup.find_all("table")
-            log(f"[4563 debug] table_count={len(tables)} period={requested_period}")
-            terms = ("4563", "百德", "合約負債", "存貨")
-            for table_index, table in enumerate(tables[:8], start=1):
-                grid = expand_table(table)
-                hits = [
-                    row for row in grid
-                    if any(term in str(cell) for term in terms for cell in row)
-                ]
-                sample = hits[:12] if hits else grid[:6]
-                if sample:
-                    log(f"[4563 debug] table#{table_index} sample={sample!r}")
-                    log(f"[4563 debug] table#{table_index} first_rows={grid[:12]!r}")
     return out
 
 
