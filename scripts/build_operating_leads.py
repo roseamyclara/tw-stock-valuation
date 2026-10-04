@@ -388,6 +388,7 @@ def parse_balance_sheet(
                 sample = hits[:12] if hits else grid[:6]
                 if sample:
                     log(f"[4563 debug] table#{table_index} sample={sample!r}")
+                    log(f"[4563 debug] table#{table_index} first_rows={grid[:12]!r}")
     return out
 
 
