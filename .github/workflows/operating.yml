@@ -4,6 +4,15 @@ on:
   schedule:
     - cron: "20 3 * * 0"
       timezone: "Asia/Taipei"
+  pull_request:
+    paths:
+      - "scripts/build_operating_leads.py"
+      - "scripts/test_operating_leads.py"
+      - "docs/assets/app.js"
+      - "docs/assets/style.css"
+      - "docs/index.html"
+      - "requirements.txt"
+      - ".github/workflows/operating.yml"
   workflow_dispatch:
     inputs:
       full_backfill:
@@ -46,7 +55,11 @@ jobs:
         working-directory: scripts
         run: python -m unittest -v test_operating_leads.py
 
+      - name: 前端 JavaScript 語法檢查
+        run: node --check docs/assets/app.js
+
       - name: 更新合約負債、存貨與營收
+        if: github.event_name != 'pull_request'
         working-directory: scripts
         shell: bash
         run: |
@@ -57,6 +70,7 @@ jobs:
           fi
 
       - name: commit 資料
+        if: github.event_name != 'pull_request'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
