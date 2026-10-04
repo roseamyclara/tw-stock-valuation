@@ -709,8 +709,10 @@ def validate_4563(
     checks = {
         ("2026Q2", "contractCurrent"): (145_000_000, 5_000_000),
         ("2026Q2", "inventory"): (1_382_000_000, 8_000_000),
+        ("2026Q2", "revenue"): (740_000_000, 10_000_000),
         ("2026Q1", "contractCurrent"): (181_000_000, 5_000_000),
         ("2026Q1", "inventory"): (1_403_000_000, 8_000_000),
+        ("2026Q1", "revenue"): (551_000_000, 10_000_000),
     }
     errors: list[str] = []
     for (period, key), (expected, tolerance) in checks.items():
