@@ -82,12 +82,12 @@ class OperatingLeadParserTests(unittest.TestCase):
         payload = {
             "ylabel": "新台幣仟元",
             "xaxisList": ["2025Q4", "2026Q1", "2026Q2"],
-            "checkedNameList": ["4563 百德", "2330 台積電"],
-            "showNameList": ["Quaser", "TSMC"],
-            "displayCompanyId": ["4563 百德", "2330 台積電"],
+            "checkedNameList": ["4563 百德 (上櫃電機機械)", "2330 台積電 (上市半導體業)"],
+            "showNameList": ["4563 百德 (上櫃電機機械)", "2330 台積電 (上市半導體業)"],
+            "displayCompanyId": ["4563 百德 (上櫃電機機械)", "2330 台積電 (上市半導體業)"],
             "graphData": [
-                {"label": "TSMC", "data": [[0, 100], [1, 110], [2, 120]]},
-                {"label": "Quaser", "data": [[0, 781000], [1, 551000], [2, 740000]]},
+                {"label": "台積電", "data": [[0, 100], [1, 110], [2, 120]]},
+                {"label": "百德", "data": [[0, 781000], [1, 551000], [2, 740000]]},
             ],
         }
         result = parse_revenue_payload(payload, ["4563", "2330"])
