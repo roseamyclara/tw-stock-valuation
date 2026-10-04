@@ -993,7 +993,7 @@ td.ind { white-space: normal; max-width: 280px; }
 
 .panel {
   background: var(--page);
-  width: min(720px, 100%);
+  width: min(860px, 100%);
   height: 100%;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
@@ -1062,6 +1062,86 @@ td.ind { white-space: normal; max-width: 280px; }
 }
 .links a { color: var(--accent); text-decoration: none; font-weight: 550; }
 .links a:hover { text-decoration: underline; }
+
+/* ============================================================ 營運先行指標 */
+.op-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+.op-kpi {
+  min-width: 0;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 12px 13px;
+}
+.op-kpi .k { color: var(--muted); font-size: 11.5px; }
+.op-kpi .v {
+  margin-top: 2px;
+  font-size: 20px;
+  font-weight: 680;
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+}
+.op-sub {
+  margin-top: 5px;
+  min-height: 1.45em;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.op-controls {
+  display: inline-flex;
+  gap: 3px;
+  margin: 2px 0 12px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+.op-controls button {
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  padding: 6px 13px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.op-controls button[aria-pressed="true"] {
+  color: var(--text-primary);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-1);
+}
+.op-normalized { margin: 0 0 12px; padding: 14px; }
+.op-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.op-chart-grid > .card { min-width: 0; padding: 14px; }
+.op-chart-grid > .card:last-child { grid-column: 1 / -1; }
+.op-chart-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  margin-bottom: 5px;
+}
+.op-chart-head strong { font-size: 13px; font-weight: 650; }
+.op-chart-head span { color: var(--muted); font-size: 11px; }
+
+@media (max-width: 700px) {
+  .op-summary { grid-template-columns: 1fr; }
+  .op-chart-grid { grid-template-columns: 1fr; }
+  .op-chart-grid > .card:last-child { grid-column: auto; }
+  .op-controls { width: 100%; }
+  .op-controls button { flex: 1 1 0; }
+}
 
 /* ============================================================ 骨架 */
 .skeleton {

@@ -34,7 +34,7 @@
   const state = {
     rows: [], view: [], meta: null, market: null, tags: {}, movers: null, history: null,
     tdcc: { date: null, base: null, d: {} },
-    performance: { stocks: {} }, returnPeriod: "d1", revenueNotes: {}, profitGrowth: {stocks:{}}, selectedColumns: ["p", "cap", "priceReturn", "pe", "ps", "rev_yoy", "rev_cum", "net_yoy", "rev_note"],
+    performance: { stocks: {} }, returnPeriod: "d1", revenueNotes: {}, profitGrowth: {stocks:{}}, operating: {stocks:{}}, selectedColumns: ["p", "cap", "priceReturn", "pe", "ps", "rev_yoy", "rev_cum", "contract_yoy", "inventory_yoy", "qrev_yoy", "net_yoy", "rev_note"],
     // sorts: [{k, dir}]，最多 3 個，陣列順序就是優先序（索引 0 最優先）
     // 空陣列代表沒設任何條件，套用 DEFAULT_SORTS
     sorts: [], filterMarket: "", industry: "", tag: "", q: "",
@@ -45,6 +45,7 @@
 
   const RETURN_PERIODS = { d1: "一日", y5: "五年", y1: "一年", ytd: "今年迄今", m3: "三個月", m1: "一個月", w1: "一週" };
   const performanceOf = (code) => state.performance.stocks[code] || {};
+  const operatingOf = (code) => state.operating.stocks[code] || {};
   const returnOf = (code) => (performanceOf(code).returns || {})[state.returnPeriod] ?? null;
   const periodOptions = () => Object.entries(RETURN_PERIODS).map(([k, t]) =>
     `<option value="${k}"${state.returnPeriod === k ? " selected" : ""}>${t}</option>`).join("");
@@ -207,7 +208,7 @@
 
     let lo = Math.min(...vals), hi = Math.max(...vals);
     const pad = (hi - lo) * 0.12 || Math.abs(hi) * 0.12 || 1;
-    lo = Math.max(0, lo - pad); hi = hi + pad;
+    lo = opts.allowNegative ? lo - pad : Math.max(0, lo - pad); hi = hi + pad;
 
     const X = (i) => M.l + (labels.length === 1 ? 0 : (i * (W - M.l - M.r)) / (labels.length - 1));
     const Y = (v) => H - M.b - ((v - lo) / (hi - lo)) * (H - M.t - M.b);
@@ -366,6 +367,19 @@
     return `<span title="${d.year} Q${d.quarter} 年初至今累計，對比去年同期；${basis}">${label}</span><small class="profit-period">${d.year} Q${d.quarter} 累計</small>`;
   }
 
+  function operatingAmountCell(r, field, periodField) {
+    const d = operatingOf(r.c), value = d[field], period = d[periodField];
+    if (value == null) return cell(null);
+    return `<span title="${esc(period || "")}">${human(value)}</span><small class="profit-period">${esc(period || "")}</small>`;
+  }
+  function operatingChangeValue(r, changeField, kind) {
+    const d = operatingOf(r.c), change = d[changeField] || {};
+    return change[kind] ?? null;
+  }
+  function operatingChangeCell(r, changeField, kind) {
+    return cell(operatingChangeValue(r, changeField, kind), 1, true);
+  }
+
   const COLS = [
     { k: "c", t: "代號", cls: "code", get: (r) => r.c },
     { k: "n", t: "名稱", cls: "name-cell", get: (r) => `${esc(r.n)} <span class="mkt">${LABEL[r.m]}</span>` },
@@ -392,6 +406,15 @@
     { k: "rev_yoy", t: "月營收年增%", get: (r) => cell(r.rev && r.rev.yoy, 1, true), val: (r) => r.rev && r.rev.yoy },
     { k: "rev_note", t: "營收變動說明", cls: "revenue-note-cell", get: revenueNote },
     { k: "rev_cum", t: "累計年增%", get: (r) => cell(r.rev && r.rev.cum_yoy, 1, true), val: (r) => r.rev && r.rev.cum_yoy },
+    { k: "contract", t: "合約負債", sel: "合約負債－流動", get: (r) => operatingAmountCell(r, "contractCurrent", "contractCurrentPeriod"), val: (r) => operatingOf(r.c).contractCurrent ?? null },
+    { k: "contract_qoq", t: "合約負債QoQ%", get: (r) => operatingChangeCell(r, "contractCurrentChange", "qoq"), val: (r) => operatingChangeValue(r, "contractCurrentChange", "qoq") },
+    { k: "contract_yoy", t: "合約負債YoY%", get: (r) => operatingChangeCell(r, "contractCurrentChange", "yoy"), val: (r) => operatingChangeValue(r, "contractCurrentChange", "yoy") },
+    { k: "inventory", t: "存貨", get: (r) => operatingAmountCell(r, "inventory", "inventoryPeriod"), val: (r) => operatingOf(r.c).inventory ?? null },
+    { k: "inventory_qoq", t: "存貨QoQ%", get: (r) => operatingChangeCell(r, "inventoryChange", "qoq"), val: (r) => operatingChangeValue(r, "inventoryChange", "qoq") },
+    { k: "inventory_yoy", t: "存貨YoY%", get: (r) => operatingChangeCell(r, "inventoryChange", "yoy"), val: (r) => operatingChangeValue(r, "inventoryChange", "yoy") },
+    { k: "qrev", t: "季營收", sel: "財報期營收", get: (r) => operatingAmountCell(r, "revenue", "revenuePeriod"), val: (r) => operatingOf(r.c).revenue ?? null },
+    { k: "qrev_qoq", t: "季營收QoQ%", get: (r) => operatingChangeCell(r, "revenueChange", "qoq"), val: (r) => operatingChangeValue(r, "revenueChange", "qoq") },
+    { k: "qrev_yoy", t: "季營收YoY%", get: (r) => operatingChangeCell(r, "revenueChange", "yoy"), val: (r) => operatingChangeValue(r, "revenueChange", "yoy") },
     { k: "net_yoy", t: "淨利年增%", get: profitCell, val: (r) => profitRecord(r)?.yoy ?? null },
     { k: "eps", t: "EPS", get: (r) => cell(r.fin && r.fin.eps), val: (r) => r.fin && r.fin.eps },
     // 籌碼面：集保股權分散表，一張 = 1,000 股，所以「400 張以上」= 400,000 股以上
@@ -472,8 +495,9 @@
   }
 
   // 手機排序選單只放有意義的數值欄位
-  const SORTABLE = ["priceReturn", "fromLow52", "fromHigh52", "cap", "p", "pe", "ps", "pb", "dy", "rev_yoy", "rev_cum", "net_yoy", "eps",
-                    "big", "big_chg"];
+  const SORTABLE = ["priceReturn", "fromLow52", "fromHigh52", "cap", "p", "pe", "ps", "pb", "dy", "rev_yoy", "rev_cum",
+                    "contract", "contract_qoq", "contract_yoy", "inventory", "inventory_qoq", "inventory_yoy",
+                    "qrev", "qrev_qoq", "qrev_yoy", "net_yoy", "eps", "big", "big_chg"];
 
   // ------------------------------------------------------------ 多欄排序
   const DEFAULT_SORTS = [{ k: "cap", dir: -1 }];   // 沒設條件時：市值由大到小
@@ -774,9 +798,42 @@
   async function openStock(code) {
     const base = state.rows.find((r) => r.c === code);
     if (!base) return;
-    // 個股檔只存歷史；當前股價與估值直接用已載入的 latest.json
-    const d = (await getJSON(`data/stock/${code}.json`, null)) || {};
+    // 個股檔只存歷史；營運先行指標另按需載入，不增加首頁初始下載量。
+    const [dRaw, opRaw] = await Promise.all([
+      getJSON(`data/stock/${code}.json`, null),
+      getJSON(`data/operating/${code}.json`, null),
+    ]);
+    const d = dRaw || {}, op = opRaw || {};
     const rev = base.rev || {}, fin = base.fin || {};
+    const opPeriods = op.periods || {};
+    const opLabels = Object.keys(opPeriods).sort();
+
+    const prevQuarter = (period) => {
+      const m = /^(\d{4})Q([1-4])$/.exec(period || "");
+      if (!m) return null;
+      let y = Number(m[1]), q = Number(m[2]) - 1;
+      if (!q) { y -= 1; q = 4; }
+      return `${y}Q${q}`;
+    };
+    const prevYear = (period) => {
+      const m = /^(\d{4})Q([1-4])$/.exec(period || "");
+      return m ? `${Number(m[1]) - 1}Q${m[2]}` : null;
+    };
+    const opDelta = (period, field, kind) => {
+      const cur = opPeriods[period] && opPeriods[period][field];
+      const prior = kind === "qoq" ? prevQuarter(period) : prevYear(period);
+      const old = prior && opPeriods[prior] && opPeriods[prior][field];
+      if (cur == null || old == null || old === 0) return null;
+      return (cur - old) / Math.abs(old) * 100;
+    };
+    const latestOpValue = (field) => {
+      const period = [...opLabels].reverse().find(p => opPeriods[p] && opPeriods[p][field] != null);
+      return period ? [period, opPeriods[period][field]] : [null, null];
+    };
+    const opSummaryBox = (title, field) => {
+      const [period, value] = latestOpValue(field);
+      return `<div class="op-kpi"><div class="k">${title}</div><div class="v">${value == null ? "—" : human(value)}</div><div class="op-sub">${period || "尚無資料"} · YoY ${period ? (cell(opDelta(period, field, "yoy"), 1, true)) : "—"}</div></div>`;
+    };
 
     const ov = document.createElement("div");
     ov.className = "overlay";
@@ -822,6 +879,27 @@
         <div><div class="k">淨利年增%</div><div class="v">${cell(fin.net_yoy, 1, true)}</div></div>
         <div><div class="k">營益年增%</div><div class="v">${cell(fin.op_yoy, 1, true)}</div></div>
       </div>
+      <h4>營運先行指標</h4>
+      <p class="note">合約負債預設顯示流動項目；未單獨揭露或不適用時保留空白，不以 0 代替。興櫃依實際申報期別顯示。</p>
+      <div class="op-summary">
+        ${opSummaryBox("合約負債－流動", "contractCurrent")}
+        ${opSummaryBox("存貨", "inventory")}
+        ${opSummaryBox("財報期營收", "revenue")}
+      </div>
+      <div class="op-controls" role="group" aria-label="營運指標圖表模式">
+        <button type="button" data-op-mode="amount" aria-pressed="true">金額</button>
+        <button type="button" data-op-mode="qoq" aria-pressed="false">QoQ</button>
+        <button type="button" data-op-mode="yoy" aria-pressed="false">YoY</button>
+      </div>
+      <div class="card op-normalized">
+        <div class="op-chart-head"><strong>三項指標比較</strong><span>共同可比期＝100</span></div>
+        <div class="chart-wrap"><div class="chart-scroll"><svg class="chart" id="opCompareChart" role="img" aria-label="合約負債、存貨、營收標準化比較"></svg></div><div class="tooltip" id="opCompareTip" hidden></div></div>
+      </div>
+      <div class="op-chart-grid">
+        <div class="card"><div class="op-chart-head"><strong>合約負債－流動</strong><span id="opContractUnit">億元</span></div><div class="chart-wrap"><div class="chart-scroll"><svg class="chart" id="opContractChart"></svg></div><div class="tooltip" id="opContractTip" hidden></div></div></div>
+        <div class="card"><div class="op-chart-head"><strong>存貨</strong><span id="opInventoryUnit">億元</span></div><div class="chart-wrap"><div class="chart-scroll"><svg class="chart" id="opInventoryChart"></svg></div><div class="tooltip" id="opInventoryTip" hidden></div></div></div>
+        <div class="card"><div class="op-chart-head"><strong>財報期營收</strong><span id="opRevenueUnit">億元</span></div><div class="chart-wrap"><div class="chart-scroll"><svg class="chart" id="opRevenueChart"></svg></div><div class="tooltip" id="opRevenueTip" hidden></div></div></div>
+      </div>
       <h4>歷年本益比</h4>
       <div class="card" style="margin-top:12px"><div class="chart-wrap">
         <div class="chart-scroll"><svg class="chart" id="stockChart" role="img" aria-label="${esc(base.n)} 歷年本益比"></svg></div>
@@ -841,6 +919,65 @@
     ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
     document.addEventListener("keydown", esc2);
     ov.querySelector(".close").focus();
+
+    const opSeries = (field, mode) => opLabels.map(period => {
+      const raw = opPeriods[period] && opPeriods[period][field];
+      if (mode === "amount") return [period, raw == null ? null : raw / 1e8];
+      return [period, opDelta(period, field, mode)];
+    });
+
+    const commonBase = opLabels.find(period =>
+      ["contractCurrent", "inventory", "revenue"].every(field =>
+        opPeriods[period] && opPeriods[period][field] != null));
+    const normalized = (field) => {
+      if (!commonBase) return [];
+      const baseValue = opPeriods[commonBase][field];
+      return opLabels
+        .filter(period => period >= commonBase)
+        .map(period => {
+          const value = opPeriods[period] && opPeriods[period][field];
+          return [period, value == null ? null : value / baseValue * 100];
+        });
+    };
+
+    const renderOperating = (mode) => {
+      const amount = mode === "amount", unit = amount ? "億元" : "%";
+      const allowNegative = !amount;
+      const fields = [
+        ["contractCurrent", "#opContractChart", "#opContractTip", "#opContractUnit", "合約負債", "var(--accent)"],
+        ["inventory", "#opInventoryChart", "#opInventoryTip", "#opInventoryUnit", "存貨", "var(--series-2)"],
+        ["revenue", "#opRevenueChart", "#opRevenueTip", "#opRevenueUnit", "營收", "var(--series-3)"],
+      ];
+      fields.forEach(([field, svgSel, tipSel, unitSel, name, color]) => {
+        const unitEl = ov.querySelector(unitSel);
+        if (unitEl) unitEl.textContent = unit;
+        lineChart(
+          ov.querySelector(svgSel),
+          ov.querySelector(tipSel),
+          [{ key: field, name, color, points: opSeries(field, mode) }],
+          { unit, allowNegative, height: MOBILE.matches ? 190 : 220 }
+        );
+      });
+    };
+
+    lineChart(
+      ov.querySelector("#opCompareChart"),
+      ov.querySelector("#opCompareTip"),
+      commonBase ? [
+        { key: "contract", name: "合約負債", color: "var(--accent)", points: normalized("contractCurrent") },
+        { key: "inventory", name: "存貨", color: "var(--series-2)", points: normalized("inventory") },
+        { key: "revenue", name: "營收", color: "var(--series-3)", points: normalized("revenue") },
+      ] : [],
+      { unit: "", height: MOBILE.matches ? 220 : 250 }
+    );
+    renderOperating("amount");
+    ov.querySelectorAll("[data-op-mode]").forEach(button => {
+      button.addEventListener("click", () => {
+        ov.querySelectorAll("[data-op-mode]").forEach(b => b.setAttribute("aria-pressed", "false"));
+        button.setAttribute("aria-pressed", "true");
+        renderOperating(button.dataset.opMode);
+      });
+    });
 
     const hist = (d.hist || []).map(([ym, pe]) => [ym, pe]).filter((p) => p[1] != null);
     lineChart(ov.querySelector("#stockChart"), ov.querySelector("#stockTip"),
@@ -943,7 +1080,7 @@
 
   // ---------------------------------------------------------------- 啟動
   (async function init() {
-    const [meta, market, rows, tags, movers, history, tdcc, performance, revenueNotes, profitGrowth] = await Promise.all([
+    const [meta, market, rows, tags, movers, history, tdcc, performance, revenueNotes, profitGrowth, operating] = await Promise.all([
       getJSON("data/meta.json", null),
       getJSON("data/market.json", null),
       getJSON("data/latest.json", []),
@@ -954,10 +1091,12 @@
       getJSON("data/performance.json", null),
       getJSON("data/revenue_notes.json", {}),
       getJSON("data/profit_growth.json", {stocks:{}}),
+      getJSON("data/operating_latest.json", {stocks:{}}),
     ]);
     state.meta = meta; state.market = market;
     state.revenueNotes = revenueNotes || {};
     state.profitGrowth = profitGrowth || {stocks:{}};
+    state.operating = operating || {stocks:{}};
     state.rows = rows || []; state.tags = tags || {}; state.movers = movers;
     state.history = history;
     if (performance && performance.stocks) state.performance = performance;

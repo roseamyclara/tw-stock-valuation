@@ -1,0 +1,102 @@
+name: 營運先行指標更新
+
+on:
+  schedule:
+    - cron: "20 3 * * 0"
+      timezone: "Asia/Taipei"
+  push:
+    branches:
+      - main
+    paths:
+      - "scripts/build_operating_leads.py"
+      - "scripts/test_operating_leads.py"
+      - "docs/assets/app.js"
+      - "docs/assets/style.css"
+      - "docs/index.html"
+      - "requirements.txt"
+      - ".github/workflows/operating.yml"
+  pull_request:
+    paths:
+      - "scripts/build_operating_leads.py"
+      - "scripts/test_operating_leads.py"
+      - "docs/assets/app.js"
+      - "docs/assets/style.css"
+      - "docs/index.html"
+      - "requirements.txt"
+      - ".github/workflows/operating.yml"
+  workflow_dispatch:
+    inputs:
+      full_backfill:
+        description: "完整回補歷史（第一次執行建議勾選）"
+        required: false
+        default: true
+        type: boolean
+      years:
+        description: "完整回補年數"
+        required: false
+        default: "5"
+        type: choice
+        options:
+          - "3"
+          - "5"
+          - "8"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: operating-leads-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: 單元測試
+        working-directory: scripts
+        run: python -m unittest -v test_operating_leads.py
+
+      - name: 前端 JavaScript 語法檢查
+        run: node --check docs/assets/app.js
+
+      - name: 百德 4563 官方資料 smoke test
+        if: github.event_name == 'pull_request'
+        working-directory: scripts
+        run: python build_operating_leads.py --years 2 --codes 4563
+
+      - name: 更新合約負債、存貨與營收
+        if: github.event_name != 'pull_request'
+        working-directory: scripts
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.full_backfill }}" == "true" ]]; then
+            python build_operating_leads.py --years "${{ github.event.inputs.years || '5' }}"
+          elif [[ ! -f ../docs/data/operating_latest.json ]]; then
+            echo "第一次建立資料，先完整回補 3 年；需要更長歷史可手動選 5/8 年"
+            python build_operating_leads.py --years 3
+          else
+            python build_operating_leads.py --years 5 --latest-only
+          fi
+
+      - name: commit 資料
+        if: github.event_name != 'pull_request'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data/operating docs/data/operating_latest.json
+          if git diff --staged --quiet; then
+            echo "營運指標無變化，跳過 commit"
+          else
+            git commit -m "更新營運先行指標 $(TZ=Asia/Taipei date +%Y-%m-%d)"
+            git push
+          fi
