@@ -130,7 +130,7 @@ jobs:
 
           if [[ "${{ github.ref }}" == "refs/heads/feature/operating-leads-v2" ]]; then
             # 開發時立即驗證台積電附註，不等待全市場。
-            python build_note_disclosures.py --codes 2330 --years 1 --max-requests 4 --require-tsmc
+            python build_note_disclosures.py --codes 2330 --max-requests 1 --require-tsmc
           else
             # 台積電是已知「主表不單列合約負債、附註才揭露」的基準案例。
             # 先回補近 5 年，確保個股圖不只有最新一點。
