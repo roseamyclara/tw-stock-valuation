@@ -94,7 +94,7 @@ jobs:
         working-directory: scripts
         run: |
           python build_operating_leads.py --years 1 --codes 2330
-          python build_note_disclosures.py --codes 2330 --years 1 --max-requests 4 --require-tsmc
+          python build_note_disclosures.py --codes 2330 --max-requests 1 --require-tsmc
 
       # 開發分支只跑已知基準個股，快速驗證解析器；main 才做全市場正式資料。
       - name: 更新合約負債、存貨與營收
@@ -134,7 +134,7 @@ jobs:
           else
             # 台積電是已知「主表不單列合約負債、附註才揭露」的基準案例。
             # 先回補近 5 年，確保個股圖不只有最新一點。
-            python build_note_disclosures.py --codes 2330 --years 5 --max-requests 20 --require-tsmc
+            python build_note_disclosures.py --codes 2330 --max-requests 1 --require-tsmc
 
             # 其餘公司漸進補抓最新財報季；notesChecked 會避免反覆重抓。
             python build_note_disclosures.py --max-requests 120
