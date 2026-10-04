@@ -511,6 +511,130 @@ def first_money_after_label(text: str, label_start: int, window: int = 420) -> i
     return int(match.group(1).replace(",", ""))
 
 
+
+def parse_pdf_note_text(text: str, period: str) -> dict[str, int | None]:
+    multiplier = pdf_amount_multiplier(text)
+    out = empty_note_values()
+    lines = [
+        re.sub(r"\s+", " ", line).strip()
+        for line in text.replace("\u3000", " ").splitlines()
+        if line.strip()
+    ]
+
+    for index, line in enumerate(lines):
+        if not is_contract_text(line):
+            continue
+        block = " ".join(lines[index : index + 4])
+        label_start = block.find("合約負債")
+        if label_start < 0:
+            label_start = block.lower().find("contract liabil")
+        if label_start < 0:
+            continue
+        raw = first_money_after_label(block, label_start)
+        if raw is None:
+            continue
+        value = raw * multiplier
+        liq = liquidity(block)
+        if liq == "noncurrent":
+            merge_value(out, "contractNoncurrent", value)
+        elif liq == "current":
+            merge_value(out, "contractCurrent", value)
+        else:
+            merge_value(out, "contractTotal", value)
+
+    for index, line in enumerate(lines):
+        if not is_customer_receipt_text(line):
+            continue
+        section = lines[index : index + 28]
+        for offset, row_text in enumerate(section):
+            if (
+                offset > 0
+                and re.match(r"^[（(]?[一二三四五六七八九十\d]+[）).、]", row_text)
+                and not is_customer_receipt_text(row_text)
+            ):
+                break
+            liq = liquidity(row_text)
+            if liq not in {"current", "noncurrent"}:
+                continue
+            raw = first_money_after_label(row_text, 0, window=len(row_text))
+            if raw is None and offset + 1 < len(section):
+                combined = row_text + " " + section[offset + 1]
+                raw = first_money_after_label(combined, 0, window=len(combined))
+            if raw is None:
+                continue
+            key = (
+                "customerReceiptsNoncurrent"
+                if liq == "noncurrent"
+                else "customerReceiptsCurrent"
+            )
+            merge_value(out, key, raw * multiplier)
+
+        if (
+            out["customerReceiptsCurrent"] is None
+            and out["customerReceiptsNoncurrent"] is None
+        ):
+            block = " ".join(section[:4])
+            raw = first_money_after_label(block, 0, window=len(block))
+            if raw is not None:
+                merge_value(out, "customerReceiptsTotal", raw * multiplier)
+
+    if (
+        out["contractTotal"] is None
+        and out["contractCurrent"] is not None
+        and out["contractNoncurrent"] is not None
+    ):
+        out["contractTotal"] = out["contractCurrent"] + out["contractNoncurrent"]
+    elif (
+        out["contractTotal"] is None
+        and out["contractCurrent"] is not None
+        and out["contractNoncurrent"] is None
+    ):
+        if any(
+            is_contract_text(line) and liquidity(line) == "current"
+            for line in lines
+        ):
+            out["contractTotal"] = out["contractCurrent"]
+
+    if (
+        out["customerReceiptsTotal"] is None
+        and out["customerReceiptsCurrent"] is not None
+        and out["customerReceiptsNoncurrent"] is not None
+    ):
+        out["customerReceiptsTotal"] = (
+            out["customerReceiptsCurrent"]
+            + out["customerReceiptsNoncurrent"]
+        )
+    return out
+
+
+def parse_pdf_report(content: bytes, period: str) -> dict[str, int | None]:
+    if not content.startswith(b"%PDF"):
+        raise ValueError("官方電子書下載內容不是 PDF")
+
+    reader = PdfReader(io.BytesIO(content))
+    texts: list[str] = []
+    unit_pages: list[str] = []
+    note_pages: list[str] = []
+    for page in reader.pages:
+        try:
+            value = page.extract_text() or ""
+        except Exception:  # noqa: BLE001
+            value = ""
+        if not value:
+            continue
+        if "仟元" in value or "千元" in value or "百萬元" in value:
+            unit_pages.append(value)
+        if is_contract_text(value) or is_customer_receipt_text(value):
+            note_pages.append(value)
+
+    if not note_pages:
+        raise ValueError("財報 PDF 文字層找不到合約負債或客戶暫收／預收附註")
+
+    texts.extend(unit_pages[:3])
+    texts.extend(note_pages)
+    return parse_pdf_note_text("\n".join(texts), period)
+
+
 class NoteClient:
     def __init__(self) -> None:
         self.session = requests.Session()
