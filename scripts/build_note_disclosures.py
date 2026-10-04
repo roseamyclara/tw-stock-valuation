@@ -27,7 +27,7 @@ from typing import Any
 
 import requests
 from bs4 import BeautifulSoup
-from pypdf import PdfReader
+import pymupdf
 from urllib.parse import urlencode, urljoin
 
 from build_operating_leads import (
@@ -611,28 +611,43 @@ def parse_pdf_report(content: bytes, period: str) -> dict[str, int | None]:
     if not content.startswith(b"%PDF"):
         raise ValueError("官方電子書下載內容不是 PDF")
 
-    reader = PdfReader(io.BytesIO(content))
-    texts: list[str] = []
+    document = pymupdf.open(stream=content, filetype="pdf")
     unit_pages: list[str] = []
     note_pages: list[str] = []
-    for page in reader.pages:
+    for page in document:
         try:
-            value = page.extract_text() or ""
+            value = page.get_text("text") or ""
         except Exception:  # noqa: BLE001
             value = ""
         if not value:
             continue
-        if "仟元" in value or "千元" in value or "百萬元" in value:
+        if (
+            len(unit_pages) < 3
+            and ("仟元" in value or "千元" in value or "百萬元" in value)
+        ):
             unit_pages.append(value)
         if is_contract_text(value) or is_customer_receipt_text(value):
             note_pages.append(value)
 
+        # Most disclosures put contract balances and customer receipts on the
+        # same note page. Once both labels are found and unit evidence exists,
+        # no reason remains to scan the rest of a 100+ page report.
+        combined_notes = "\n".join(note_pages)
+        if (
+            unit_pages
+            and is_contract_text(combined_notes)
+            and is_customer_receipt_text(combined_notes)
+        ):
+            break
+
+    document.close()
     if not note_pages:
         raise ValueError("財報 PDF 文字層找不到合約負債或客戶暫收／預收附註")
 
-    texts.extend(unit_pages[:3])
-    texts.extend(note_pages)
-    return parse_pdf_note_text("\n".join(texts), period)
+    return parse_pdf_note_text(
+        "\n".join(unit_pages + note_pages),
+        period,
+    )
 
 
 class NoteClient:
