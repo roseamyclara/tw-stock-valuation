@@ -503,6 +503,13 @@ def normalize_identity(value: Any) -> str:
     return re.sub(r"\s+", "", str(value or "")).lower()
 
 
+def company_short_alias(value: Any) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    text = re.sub(r"^[0-9A-Za-z]{4,10}\s*", "", text)
+    text = re.sub(r"\s*[（(][^）)]*[）)]\s*$", "", text).strip()
+    return normalize_identity(text)
+
+
 def parse_revenue_payload(
     payload: dict[str, Any], batch: list[str]
 ) -> dict[str, dict[str, int | None]]:
@@ -522,6 +529,9 @@ def parse_revenue_payload(
         for values in (checked, shown, displayed):
             if index < len(values) and values[index]:
                 aliases[code].add(normalize_identity(values[index]))
+                short = company_short_alias(values[index])
+                if short:
+                    aliases[code].add(short)
 
     result: dict[str, dict[str, int | None]] = {code: {} for code in batch}
     claimed: set[str] = set()
@@ -559,16 +569,6 @@ def parse_revenue_payload(
                 None if value is None else int(round(value * multiplier))
             )
 
-    if "4563" in batch and not any(
-        value is not None for value in result.get("4563", {}).values()
-    ):
-        log(
-            "[4563 revenue debug] "
-            f"message={payload.get('message')!r} "
-            f"qnumber={payload.get('qnumber')!r} "
-            f"json={payload.get('json')!r} "
-            f"graphData={payload.get('graphData')!r}"
-        )
     return result
 
 
