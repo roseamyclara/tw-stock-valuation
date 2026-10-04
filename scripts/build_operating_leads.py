@@ -277,7 +277,8 @@ def parse_balance_sheet(
     marker = soup.select_one('input[name="yearseason"]')
     returned = (marker.get("value") or "").strip() if marker else ""
     expected = requested_period.replace("Q", "")
-    if returned != expected:
+    returned_normalized = returned.upper().replace("Q", "")
+    if returned_normalized != expected:
         raise ValueError(
             f"期別不符：要求 {requested_period}，官方回傳 {returned or 'unknown'}"
         )
@@ -641,7 +642,9 @@ def build_latest(
     }
 
 
-def validate_4563(docs: dict[str, dict[str, Any]]) -> None:
+def validate_4563(
+    docs: dict[str, dict[str, Any]], *, require_benchmark: bool = False
+) -> None:
     """Regression guard for the contract-liability values known to have been wrong before."""
     periods = ((docs.get("4563") or {}).get("periods") or {})
     checks = {
@@ -654,6 +657,8 @@ def validate_4563(docs: dict[str, dict[str, Any]]) -> None:
     for (period, key), (expected, tolerance) in checks.items():
         actual = (periods.get(period) or {}).get(key)
         if actual is None:
+            if require_benchmark:
+                errors.append(f"4563 {period} {key}: 未抓到資料")
             continue
         if abs(actual - expected) > tolerance:
             errors.append(
@@ -762,7 +767,14 @@ def main() -> int:
                 )
         save_docs(codes, meta, docs)
 
-    validate_4563(docs)
+    validate_4563(
+        docs,
+        require_benchmark=(
+            "4563" in meta
+            and "2026Q1" in allowed_periods
+            and "2026Q2" in allowed_periods
+        ),
+    )
     save_docs(codes, meta, docs)
     write_json(
         LATEST_OUT,
