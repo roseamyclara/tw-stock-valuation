@@ -4,9 +4,13 @@ on:
   schedule:
     - cron: "20 3 * * 0"
       timezone: "Asia/Taipei"
+
+  # main 合併後持續自動更新；功能分支在開發期間也必須真正產生資料，
+  # 否則 PR smoke test 雖能驗證 Q2，產出的 JSON 會隨 runner 結束而消失。
   push:
     branches:
       - main
+      - feature/operating-leads-v2
     paths:
       - "scripts/build_operating_leads.py"
       - "scripts/test_operating_leads.py"
@@ -15,6 +19,8 @@ on:
       - "docs/index.html"
       - "requirements.txt"
       - ".github/workflows/operating.yml"
+
+  # PR 只做快速驗證，不在 PR job 內 commit，避免測試 job 改動分支。
   pull_request:
     paths:
       - "scripts/build_operating_leads.py"
@@ -24,6 +30,7 @@ on:
       - "docs/index.html"
       - "requirements.txt"
       - ".github/workflows/operating.yml"
+
   workflow_dispatch:
     inputs:
       full_backfill:
@@ -45,13 +52,15 @@ permissions:
   contents: write
 
 concurrency:
-  group: operating-leads-update
+  # 分支各自排隊，避免 PR smoke test 阻塞正式 main 更新。
+  group: operating-leads-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+
     steps:
       - uses: actions/checkout@v4
 
@@ -69,31 +78,78 @@ jobs:
       - name: 前端 JavaScript 語法檢查
         run: node --check docs/assets/app.js
 
+      # PR job 確認百德已能讀到 2026Q2，且既有 benchmark 不被破壞。
+      # 這一步只測試，不負責保存資料。
       - name: 百德 4563 官方資料 smoke test
         if: github.event_name == 'pull_request'
         working-directory: scripts
         run: python build_operating_leads.py --years 2 --codes 4563
 
+      # push / schedule / workflow_dispatch 才是真正的資料發布流程。
       - name: 更新合約負債、存貨與營收
         if: github.event_name != 'pull_request'
         working-directory: scripts
         shell: bash
         run: |
+          set -euo pipefail
+
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.full_backfill }}" == "true" ]]; then
+            echo "手動完整回補 ${{ github.event.inputs.years || '5' }} 年"
             python build_operating_leads.py --years "${{ github.event.inputs.years || '5' }}"
+
           elif [[ ! -f ../docs/data/operating_latest.json ]]; then
-            echo "第一次建立資料，先完整回補 3 年；需要更長歷史可手動選 5/8 年"
+            echo "尚無正式營運資料：第一次建立時完整回補 3 年，包含目前最新已申報季"
             python build_operating_leads.py --years 3
+
           else
+            echo "已有歷史資料：只刷新最近已完成財報季與營收趨勢"
             python build_operating_leads.py --years 5 --latest-only
           fi
 
-      - name: commit 資料
+      - name: 驗證最新資料已包含應有季度
         if: github.event_name != 'pull_request'
+        working-directory: scripts
+        shell: bash
         run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("../docs/data/operating/4563.json")
+          if not path.exists():
+              raise SystemExit("找不到 docs/data/operating/4563.json，拒絕發布")
+
+          data = json.loads(path.read_text(encoding="utf-8"))
+          periods = data.get("periods", {})
+
+          # 2026-10 時百德 2026Q2 已公開；若 Q2 沒被保存，就代表又回到
+          # 「smoke test 有抓到、正式 JSON 沒寫入」的舊問題。
+          q2 = periods.get("2026Q2", {})
+          required = ("contractCurrent", "inventory")
+          missing = [key for key in required if q2.get(key) is None]
+          if missing:
+              raise SystemExit(
+                  "4563 2026Q2 正式資料缺少：" + ", ".join(missing)
+              )
+
+          print(
+              "4563 2026Q2 已保存：",
+              "contractCurrent=", q2.get("contractCurrent"),
+              "inventory=", q2.get("inventory"),
+              "revenue=", q2.get("revenue"),
+          )
+          PY
+
+      - name: commit 營運資料
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add docs/data/operating docs/data/operating_latest.json
+
           if git diff --staged --quiet; then
             echo "營運指標無變化，跳過 commit"
           else
