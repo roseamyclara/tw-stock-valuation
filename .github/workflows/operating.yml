@@ -4,6 +4,17 @@ on:
   schedule:
     - cron: "20 3 * * 0"
       timezone: "Asia/Taipei"
+  push:
+    branches:
+      - main
+    paths:
+      - "scripts/build_operating_leads.py"
+      - "scripts/test_operating_leads.py"
+      - "docs/assets/app.js"
+      - "docs/assets/style.css"
+      - "docs/index.html"
+      - "requirements.txt"
+      - ".github/workflows/operating.yml"
   pull_request:
     paths:
       - "scripts/build_operating_leads.py"
@@ -58,6 +69,11 @@ jobs:
       - name: 前端 JavaScript 語法檢查
         run: node --check docs/assets/app.js
 
+      - name: 百德 4563 官方資料 smoke test
+        if: github.event_name == 'pull_request'
+        working-directory: scripts
+        run: python build_operating_leads.py --years 2 --codes 4563
+
       - name: 更新合約負債、存貨與營收
         if: github.event_name != 'pull_request'
         working-directory: scripts
@@ -65,6 +81,9 @@ jobs:
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.full_backfill }}" == "true" ]]; then
             python build_operating_leads.py --years "${{ github.event.inputs.years || '5' }}"
+          elif [[ ! -f ../docs/data/operating_latest.json ]]; then
+            echo "第一次建立資料，完整回補 5 年"
+            python build_operating_leads.py --years 5
           else
             python build_operating_leads.py --years 5 --latest-only
           fi
