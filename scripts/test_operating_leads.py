@@ -32,6 +32,30 @@ class OperatingLeadParserTests(unittest.TestCase):
         self.assertIsNone(result["2330"]["contractNoncurrent"])
         self.assertIsNone(result["2330"]["contractTotal"])
 
+    def test_live_style_split_tables_are_aligned_by_row(self):
+        html = """<!doctype html><html><body>
+        <input name="yearseason" value="2026Q2">
+        <span>金額單位：新台幣仟元</span>
+        <table>
+          <tr><td>報表類別</td></tr>
+          <tr><td>會計科目</td></tr>
+          <tr><td>現金及約當現金</td></tr>
+          <tr><td>存貨</td></tr>
+          <tr><td>合約負債－流動</td></tr>
+        </table>
+        <table>
+          <tr><td>合併</td></tr>
+          <tr><td>4563 百德 (上櫃電機機械)</td></tr>
+          <tr><td>761,606</td></tr>
+          <tr><td>1,382,210</td></tr>
+          <tr><td>145,000</td></tr>
+        </table>
+        </body></html>"""
+        result = parse_balance_sheet(html, "2026Q2", {"4563"})
+        self.assertEqual(result["4563"]["inventory"], 1_382_210_000)
+        self.assertEqual(result["4563"]["contractCurrent"], 145_000_000)
+        self.assertTrue(result["4563"]["companyReturned"])
+
     def test_balance_sheet_rejects_silent_period_fallback(self):
         html = """<html><body>
         <input name="yearseason" value="20261">
