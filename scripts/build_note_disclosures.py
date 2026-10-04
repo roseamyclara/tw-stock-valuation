@@ -350,6 +350,64 @@ def parse_ixbrl_html(html: str, period: str) -> dict[str, int | None]:
     return out
 
 
+def debug_ixbrl_html(html: str, period: str) -> list[str]:
+    """Compact diagnostics for one real filing; avoids dumping the document."""
+    soup = BeautifulSoup(html, "html.parser")
+    instants = context_instants(soup)
+    target = quarter_end(period)
+    target_refs = {ref for ref, instant in instants.items() if instant == target}
+    facts = soup.find_all(is_ix_number)
+    target_facts = [
+        fact
+        for fact in facts
+        if str(attr_ci(fact, "contextref") or "").strip() in target_refs
+    ]
+
+    lines = [
+        (
+            f"debug {period}: contexts={len(instants)} "
+            f"targetRefs={len(target_refs)} facts={len(facts)} "
+            f"targetFacts={len(target_facts)} tables={len(soup.find_all('table'))}"
+        )
+    ]
+
+    keys = ("合約負債", "contract liabil", "暫收客戶", "temporary receipt", "customer")
+    found_rows = 0
+    for row in soup.find_all("tr"):
+        text_value = " ".join(row.stripped_strings)
+        low = text_value.lower()
+        if not any(key.lower() in low for key in keys):
+            continue
+        row_facts = row.find_all(is_ix_number)
+        details = []
+        for fact in row_facts[:8]:
+            details.append(
+                (
+                    str(attr_ci(fact, "name") or "?"),
+                    str(attr_ci(fact, "contextref") or "?"),
+                    "".join(fact.stripped_strings)[:80],
+                    str(attr_ci(fact, "scale") or "0"),
+                )
+            )
+        lines.append(
+            f"row[{found_rows}] {text_value[:700]} facts={details}"
+        )
+        found_rows += 1
+        if found_rows >= 12:
+            break
+
+    if found_rows == 0:
+        full_text = " ".join(soup.stripped_strings)
+        low = full_text.lower()
+        for key in keys:
+            idx = low.find(key.lower())
+            if idx >= 0:
+                lines.append(
+                    f"text-snippet {key}: {full_text[max(0, idx-220):idx+700]}"
+                )
+    return lines
+
+
 def ixbrl_documents(content: bytes) -> list[str]:
     blobs: list[bytes] = []
     if content[:2] == b"PK":
@@ -585,6 +643,15 @@ def main() -> int:
                     f"2330 {period}: 合約負債={parsed.get('contractCurrent') or parsed.get('contractTotal')} "
                     f"暫收客戶款={parsed.get('customerReceiptsTotal')}"
                 )
+                if (
+                    args.require_tsmc
+                    and period == "2026Q2"
+                    and parsed.get("contractCurrent") is None
+                    and parsed.get("contractTotal") is None
+                ):
+                    for doc in ixbrl_documents(content):
+                        for line in debug_ixbrl_html(doc, period):
+                            log(line)
         except Exception as exc:  # noqa: BLE001
             row["notesChecked"] = True
             row["notesCheckedAt"] = now_taipei().isoformat(timespec="seconds")
