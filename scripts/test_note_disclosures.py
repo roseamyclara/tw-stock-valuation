@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from build_note_disclosures import parse_ixbrl_html
+from build_note_disclosures import parse_ixbrl_html, parse_pdf_note_text
 
 
 class NoteDisclosureParserTests(unittest.TestCase):
@@ -56,6 +56,28 @@ class NoteDisclosureParserTests(unittest.TestCase):
         self.assertEqual(result["customerReceiptsCurrent"], 141_853_142_000)
         self.assertEqual(result["customerReceiptsNoncurrent"], 92_372_004_000)
         self.assertEqual(result["customerReceiptsTotal"], 234_225_146_000)
+
+
+    def test_tsmc_style_pdf_note_text(self):
+        text = """
+        單位：新台幣仟元
+        （二）合約餘額
+        115年6月30日 114年12月31日 114年6月30日
+        合約負債（帳列應付費用及其他流動負債） $ 55,852,048 $ 49,954,384 $ 56,799,375
+
+        （三）暫收客戶款
+        115年6月30日 114年12月31日 114年6月30日
+        流動（帳列應付費用及其他流動負債） $ 141,853,142 $ 146,559,275 $ 155,973,239
+        非流動（帳列其他非流動負債） 92,372,004 43,298,936 65,942,034
+        $ 234,225,146 $ 189,858,211 $ 221,915,273
+        """
+        result = parse_pdf_note_text(text, "2026Q2")
+        self.assertEqual(result["contractCurrent"], 55_852_048_000)
+        self.assertEqual(result["contractTotal"], 55_852_048_000)
+        self.assertEqual(result["customerReceiptsCurrent"], 141_853_142_000)
+        self.assertEqual(result["customerReceiptsNoncurrent"], 92_372_004_000)
+        self.assertEqual(result["customerReceiptsTotal"], 234_225_146_000)
+
 
     def test_wrong_period_is_not_used(self):
         html = """<html xmlns:ix="http://www.xbrl.org/2013/inlineXBRL"
