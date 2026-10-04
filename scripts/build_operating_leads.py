@@ -369,6 +369,25 @@ def parse_balance_sheet(
         ):
             item["contractTotal"] = item["contractCurrent"] + item["contractNoncurrent"]
             status["contractTotal"] = "calculated"
+
+    # Temporary live-contract diagnostic for the regression benchmark. This is
+    # intentionally limited to 4563 so an upstream layout change does not flood
+    # full-market logs.
+    if "4563" in codes:
+        benchmark = out["4563"]
+        if benchmark["contractCurrent"] is None or benchmark["inventory"] is None:
+            tables = soup.find_all("table")
+            log(f"[4563 debug] table_count={len(tables)} period={requested_period}")
+            terms = ("4563", "百德", "合約負債", "存貨")
+            for table_index, table in enumerate(tables[:8], start=1):
+                grid = expand_table(table)
+                hits = [
+                    row for row in grid
+                    if any(term in str(cell) for term in terms for cell in row)
+                ]
+                sample = hits[:12] if hits else grid[:6]
+                if sample:
+                    log(f"[4563 debug] table#{table_index} sample={sample!r}")
     return out
 
 
