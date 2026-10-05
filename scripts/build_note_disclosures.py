@@ -393,6 +393,34 @@ def parse_ixbrl_facts_regex(document: str, period: str) -> dict[str, int | None]
     return out
 
 
+def debug_raw_ixbrl_facts(document: str, period: str) -> list[str]:
+    instants = regex_context_instants(document)
+    target = quarter_end(period)
+    target_refs = {ref for ref, value in instants.items() if value == target}
+    lines = [
+        f"raw-debug {period}: contexts={len(instants)} targetRefs={len(target_refs)}"
+    ]
+    candidates: list[str] = []
+    for match in _RAW_FACT_RE.finditer(document):
+        attrs = raw_attrs(match.group("attrs") or match.group("selfattrs") or "")
+        name = attrs.get("name", "")
+        local = canon(name.split(":")[-1])
+        if not any(
+            token in local
+            for token in ("contract", "liabil", "temporary", "receipt", "customer", "advance")
+        ):
+            continue
+        cref = attrs.get("contextref", "")
+        value = raw_fact_value(match.group("body"), attrs)
+        candidates.append(
+            f"{name} context={cref} instant={instants.get(cref)} value={value}"
+        )
+        if len(candidates) >= 40:
+            break
+    lines.extend(candidates or ["raw-debug: no matching concept names"])
+    return lines
+
+
 def parse_ixbrl_html_dom(html: str, period: str) -> dict[str, int | None]:
     soup = BeautifulSoup(html, "html.parser")
     instants = context_instants(soup)
@@ -1142,6 +1170,14 @@ def main() -> int:
             content, report_id = client.download(code, period)
             parsed = parse_report(content, period)
             source = "mops_ixbrl"
+            if (
+                code == "2330"
+                and parsed.get("contractCurrent") is None
+                and parsed.get("contractTotal") is None
+            ):
+                for doc in ixbrl_documents(content)[:1]:
+                    for line in debug_raw_ixbrl_facts(doc, period):
+                        log(line)
 
             if (
                 parsed.get("contractCurrent") is None
