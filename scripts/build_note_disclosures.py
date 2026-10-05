@@ -1117,7 +1117,10 @@ def apply_disclosures(
     parsed: dict[str, int | None],
     report_id: str,
     source: str = "mops_ixbrl",
+    *,
+    complete: bool = True,
 ) -> None:
+    """Merge note values while distinguishing 'not disclosed' from 'not scanned yet'."""
     status = row.setdefault("status", {})
 
     for key in ("contractCurrent", "contractNoncurrent", "contractTotal"):
@@ -1134,16 +1137,26 @@ def apply_disclosures(
             status[key] = "reported_in_notes"
 
     for key in CUSTOMER_RECEIPT_FIELDS:
-        row[key] = parsed.get(key)
-        status[key] = (
-            "reported_in_notes" if parsed.get(key) is not None else "not_disclosed"
-        )
+        value = parsed.get(key)
+        if value is not None:
+            row[key] = value
+            status[key] = "reported_in_notes"
+        elif complete:
+            row[key] = None
+            status[key] = "not_disclosed"
+        else:
+            # Do not turn a bounded PDF queue into a false "does not exist".
+            row.setdefault(key, None)
+            status[key] = "pending_pdf"
 
-    row["notesChecked"] = True
     row["notesCheckedAt"] = now_taipei().isoformat(timespec="seconds")
     row["notesReportType"] = "consolidated" if report_id == "C" else "standalone"
     row["notesSource"] = source
-
+    row["notesChecked"] = bool(complete)
+    if complete:
+        row.pop("notesStatus", None)
+    else:
+        row["notesStatus"] = "pdf_pending"
 
 def refresh_operating_latest(
     meta: dict[str, dict[str, Any]],
@@ -1182,6 +1195,12 @@ def main() -> int:
         type=int,
         default=150,
         help="本次最多下載幾份 iXBRL 財報，避免對官方站台過度請求",
+    )
+    parser.add_argument(
+        "--max-pdf",
+        type=int,
+        default=12,
+        help="本次最多下載幾份大型 PDF 附註；0 表示不限",
     )
     parser.add_argument(
         "--refresh",
@@ -1231,7 +1250,14 @@ def main() -> int:
     jobs.sort(
         key=lambda item: (
             item[0] != "2330",
-            (docs.get(item[0], {}).get("periods", {}).get(item[1], {}).get("contractCurrent") is not None),
+            (
+                docs.get(item[0], {})
+                .get("periods", {})
+                .get(item[1], {})
+                .get("contractCurrent")
+                is not None
+            ),
+            -(meta.get(item[0], {}).get("cap") or 0),
             item[0],
             item[1],
         )
@@ -1243,25 +1269,22 @@ def main() -> int:
     log(f"財報附註：本次 {len(jobs)} 份（期間 {periods[0]}～{periods[-1]}）")
 
     processed = 0
+    pdf_attempts = 0
     for code, period in jobs:
         row = docs[code].setdefault("periods", {}).setdefault(period, {})
         try:
             content, report_id = client.download(code, period)
             parsed = parse_report(content, period)
             source = "mops_ixbrl"
-            if (
-                code == "2330"
-                and parsed.get("contractCurrent") is None
-                and parsed.get("contractTotal") is None
-            ):
-                for doc in ixbrl_documents(content)[:1]:
-                    for line in debug_raw_ixbrl_facts(doc, period):
-                        log(line)
 
-            if (
+            needs_pdf = (
                 parsed.get("contractCurrent") is None
                 or parsed.get("customerReceiptsTotal") is None
-            ):
+            )
+            complete = not needs_pdf
+
+            if needs_pdf and (args.max_pdf <= 0 or pdf_attempts < args.max_pdf):
+                pdf_attempts += 1
                 try:
                     pdf_content, pdf_filename = client.financial_report_pdf(
                         code, period
@@ -1270,27 +1293,53 @@ def main() -> int:
                     for key, value in pdf_values.items():
                         if parsed.get(key) is None and value is not None:
                             parsed[key] = value
-                    if note_values_present(pdf_values):
-                        source = "mops_pdf_notes"
-                        row["notesPdfFilename"] = pdf_filename
+                    source = (
+                        "mops_pdf_notes"
+                        if note_values_present(pdf_values)
+                        else "mops_ixbrl"
+                    )
+                    row["notesPdfFilename"] = pdf_filename
+                    row.pop("notesPdfError", None)
+                    complete = True
                 except Exception as pdf_exc:  # noqa: BLE001
                     row["notesPdfError"] = str(pdf_exc)[:240]
+                    row["notesStatus"] = "pdf_retry"
+                    complete = False
 
-            apply_disclosures(row, parsed, report_id, source)
+            elif needs_pdf:
+                # This filing stays in the queue for the next scheduled run.
+                row["notesStatus"] = "pdf_pending"
+                complete = False
+
+            apply_disclosures(
+                row,
+                parsed,
+                report_id,
+                source,
+                complete=complete,
+            )
             processed += 1
             if code == "2330":
                 log(
-                    f"2330 {period}: 合約負債={parsed.get('contractCurrent') or parsed.get('contractTotal')} "
+                    f"2330 {period}: 合約負債="
+                    f"{parsed.get('contractCurrent') or parsed.get('contractTotal')} "
                     f"暫收客戶款={parsed.get('customerReceiptsTotal')} "
                     f"source={source} pdf={row.get('notesPdfFilename')} "
                     f"pdfError={row.get('notesPdfError')}"
                 )
         except Exception as exc:  # noqa: BLE001
-            row["notesChecked"] = True
+            # Network / upstream failures must be retried later, not frozen as
+            # a permanent 'unavailable' disclosure.
+            row["notesChecked"] = False
             row["notesCheckedAt"] = now_taipei().isoformat(timespec="seconds")
-            row["notesStatus"] = "unavailable"
+            row["notesStatus"] = "retry"
             row["notesError"] = str(exc)[:240]
-            log(f"[附註略過] {code} {period}: {exc}")
+            log(f"[附註待重試] {code} {period}: {exc}")
+
+    log(
+        f"附註批次：iXBRL {processed}/{len(jobs)}，"
+        f"PDF {pdf_attempts}/{args.max_pdf if args.max_pdf > 0 else '不限'}"
+    )
 
     save_docs(codes, meta, docs)
 
