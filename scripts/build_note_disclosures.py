@@ -60,6 +60,13 @@ BOOK_QUERY = MOPSOV + "/mops/web/ajax_t57sb01_q1"
 BOOK_PAGE = MOPSOV + "/mops/web/t57sb01_q1"
 DOC_DOWNLOAD = "https://doc.twse.com.tw/server-java/t57sb01"
 
+_PDF_HREF_RE = re.compile(r"""href=["'](/pdf/[^"']+\.pdf)["']""", re.I)
+_DOC_FILENAME_RE = re.compile(
+    r"(?P<filename>(?P<year>\d{4})(?P<quarter>0[1-4])_"
+    r"(?P<code>\d{4,6})_(?P<type>AI1|AIA|AE1)\.pdf)",
+    re.I,
+)
+
 CUSTOMER_RECEIPT_FIELDS = (
     "customerReceiptsCurrent",
     "customerReceiptsNoncurrent",
@@ -846,6 +853,25 @@ def parse_pdf_report(content: bytes, period: str) -> dict[str, int | None]:
     )
 
 
+def select_quarter_pdf_filename(html: str, code: str, period: str) -> str | None:
+    year, quarter = split_period_for_pdf(period)
+    candidates: list[tuple[int, str]] = []
+    rank = {"AI1": 0, "AIA": 1, "AE1": 2}
+    for match in _DOC_FILENAME_RE.finditer(html):
+        if (
+            match.group("year") != str(year)
+            or int(match.group("quarter")) != quarter
+            or match.group("code") != code
+        ):
+            continue
+        typecode = match.group("type").upper()
+        candidates.append((rank.get(typecode, 99), match.group("filename")))
+    if not candidates:
+        return None
+    candidates.sort()
+    return candidates[0][1]
+
+
 class NoteClient:
     def __init__(self) -> None:
         self.session = requests.Session()
@@ -864,81 +890,104 @@ class NoteClient:
         self.last_hit = time.monotonic()
 
     def financial_report_pdf(self, code: str, period: str) -> tuple[bytes, str]:
+        """Download the official quarterly PDF through doc.twse.com.tw."""
         year, _quarter = split_period_for_pdf(period)
-        form = {
-            "encodeURIComponent": "1",
+        listing_params = {
             "step": "1",
-            "firstin": "ture",
-            "off": "1",
-            "TYPEK": "all",
-            "keyword4": "",
-            "code1": "",
-            "TYPEK2": "",
-            "checkbtn": "",
-            "queryName": "co_id",
-            "inpuType": "co_id",
+            "colorchg": "1",
             "co_id": code,
-            "year": str(year),
+            "year": str(year - 1911),
+            "mtype": "A",
         }
 
+        last_error: Exception | None = None
+        listing_html = ""
+        listing_url = DOC_DOWNLOAD
+        for attempt in range(3):
+            if attempt:
+                time.sleep(1.5 ** attempt)
+            self.wait()
+            try:
+                response = self.session.get(
+                    DOC_DOWNLOAD,
+                    params=listing_params,
+                    timeout=60,
+                    headers={
+                        "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+                        "Referer": "https://doc.twse.com.tw/",
+                    },
+                )
+                response.raise_for_status()
+                listing_url = response.url
+                listing_html = response.content.decode("big5", errors="replace")
+                filename = select_quarter_pdf_filename(listing_html, code, period)
+                if filename:
+                    break
+                last_error = ValueError(
+                    f"{code} {period} 官方文件索引找不到季度財報"
+                )
+            except (requests.RequestException, ValueError) as exc:
+                last_error = exc
+        else:
+            raise RuntimeError(
+                f"{code} {period} 財報索引失敗：{last_error}"
+            )
+
+        filename = select_quarter_pdf_filename(listing_html, code, period)
+        if not filename:
+            raise ValueError(f"{code} {period} 找不到 AI1/AIA/AE1 財報 PDF")
+
+        # Official endpoint returns a short HTML launcher first. The actual
+        # session-bound PDF lives at the /pdf/ URL inside that response.
+        form = {
+            "step": "9",
+            "kind": "A",
+            "co_id": code,
+            "filename": filename,
+            "colorchg": "1",
+            "DEBUG": "",
+            "SKEY1": "",
+            "SKEY2": "",
+            "YEAR": "",
+            "MDATE": "",
+            "TYPE": "",
+        }
         self.wait()
-        response = self.session.post(
-            BOOK_QUERY,
+        launch = self.session.post(
+            DOC_DOWNLOAD,
             data=form,
-            timeout=45,
+            timeout=60,
             headers={
                 "Accept": "text/html,*/*;q=0.8",
                 "Content-Type": "application/x-www-form-urlencoded",
-                "Origin": MOPSOV,
-                "Referer": BOOK_PAGE,
+                "Origin": "https://doc.twse.com.tw",
+                "Referer": listing_url,
             },
         )
-        response.raise_for_status()
-        match = re.search(r"window\.open\('([^']+)'", response.text)
-        if not match:
-            raise ValueError("MOPS 電子書查詢沒有回傳文件清單")
-        report_url = urljoin(
-            MOPSOV,
-            match.group(1).replace("&amp;", "&"),
-        )
+        launch.raise_for_status()
+        launch_html = launch.content.decode("big5", errors="replace")
+        href = _PDF_HREF_RE.search(launch_html)
+        if not href:
+            raise ValueError(
+                f"{code} {period} step=9 沒有回傳暫時 PDF 連結"
+            )
 
-        self.wait()
-        listing = self.session.get(
-            report_url,
-            timeout=45,
-            headers={
-                "Accept": "text/html,*/*;q=0.8",
-                "Referer": BOOK_PAGE,
-            },
-        )
-        listing.raise_for_status()
-        html = listing.content.decode("big5", errors="replace")
-        filename = report_filename_from_book_html(html, code, period)
-        if not filename:
-            raise ValueError(f"{code} {period} 找不到 IFRSs 中文合併財報 PDF")
-
-        pdf_url = DOC_DOWNLOAD + "?" + urlencode(
-            {
-                "step": 9,
-                "kind": "A",
-                "co_id": code,
-                "filename": filename,
-            }
-        )
+        pdf_url = urljoin("https://doc.twse.com.tw", href.group(1))
         self.wait()
         pdf = self.session.get(
             pdf_url,
-            timeout=90,
+            timeout=120,
             allow_redirects=True,
             headers={
                 "Accept": "application/pdf,*/*;q=0.8",
-                "Referer": report_url,
+                "Referer": listing_url,
             },
         )
         pdf.raise_for_status()
         if not pdf.content.startswith(b"%PDF"):
-            raise ValueError(f"{code} {period} 電子書不是 PDF")
+            raise ValueError(f"{code} {period} 官方下載結果不是 PDF")
         return pdf.content, filename
+
 
     def download(self, code: str, period: str) -> tuple[bytes, str]:
         """Fetch the complete official inline-XBRL filing, consolidated first."""
@@ -1203,7 +1252,8 @@ def main() -> int:
                 log(
                     f"2330 {period}: 合約負債={parsed.get('contractCurrent') or parsed.get('contractTotal')} "
                     f"暫收客戶款={parsed.get('customerReceiptsTotal')} "
-                    f"source={source} pdf={row.get('notesPdfFilename')}"
+                    f"source={source} pdf={row.get('notesPdfFilename')} "
+                    f"pdfError={row.get('notesPdfError')}"
                 )
         except Exception as exc:  # noqa: BLE001
             row["notesChecked"] = True
