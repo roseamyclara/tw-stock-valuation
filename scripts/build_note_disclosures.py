@@ -326,9 +326,11 @@ def parse_ixbrl_facts_regex(document: str, period: str) -> dict[str, int | None]
         if value is None:
             continue
 
-        around = document[
-            max(0, match.start() - 900): min(len(document), match.end() + 900)
-        ]
+        # For generic note concepts (e.g. ContractLiabilities), the visible
+        # row label immediately BEFORE the fact tells whether it is current.
+        # Never inspect the following row: that can contain an unrelated
+        # non-current customer-receipt fact and contaminate classification.
+        around = document[max(0, match.start() - 500): match.start()]
         around_text = canon(_RAW_TAG_RE.sub(" ", around))
 
         if "contractliabilit" in local:
