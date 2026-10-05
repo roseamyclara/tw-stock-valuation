@@ -46,6 +46,8 @@ from build_operating_leads import (
 from util import log
 
 MOPSOV = "https://mopsov.twse.com.tw"
+IXBRL_URL = MOPSOV + "/server-java/t164sb01"
+# Legacy download form retained only as a last acquisition fallback.
 DOWNLOAD_URL = (
     MOPSOV
     + "/server-java/FileDownLoad"
@@ -250,7 +252,146 @@ def merge_value(out: dict[str, int | None], key: str, value: int | None) -> None
         out[key] = None
 
 
-def parse_ixbrl_html(html: str, period: str) -> dict[str, int | None]:
+_RAW_ATTR_RE = re.compile(r"""([\\w:-]+)\\s*=\\s*["']([^"']*)["']""", re.I)
+_RAW_CONTEXT_RE = re.compile(
+    r'<xbrli:context\\b(?P<attrs>[^>]*)>(?P<body>.*?)</xbrli:context>',
+    re.I | re.S,
+)
+_RAW_INSTANT_RE = re.compile(r'<xbrli:instant>([^<]+)</xbrli:instant>', re.I)
+_RAW_FACT_RE = re.compile(
+    r'<ix:nonfraction\\b(?P<attrs>[^>]*)>(?P<body>.*?)</ix:nonfraction>'
+    r'|<ix:nonfraction\\b(?P<selfattrs>[^>]*)/>',
+    re.I | re.S,
+)
+_RAW_TAG_RE = re.compile(r'<[^>]+>', re.S)
+
+
+def raw_attrs(value: str) -> dict[str, str]:
+    return {key.lower(): val for key, val in _RAW_ATTR_RE.findall(value)}
+
+
+def decode_ixbrl_bytes(blob: bytes) -> str:
+    """Decode MOPS bytes from content, because the declared charset is unreliable."""
+    try:
+        return blob.decode("utf-8")
+    except UnicodeDecodeError:
+        return blob.decode("big5hkscs", errors="replace")
+
+
+def regex_context_instants(document: str) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for match in _RAW_CONTEXT_RE.finditer(document):
+        attrs = raw_attrs(match.group("attrs"))
+        context_id = attrs.get("id")
+        instant = _RAW_INSTANT_RE.search(match.group("body"))
+        if not context_id or not instant:
+            continue
+        value = instant.group(1).strip()
+        if re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", value):
+            out[context_id] = value
+    return out
+
+
+def raw_fact_value(body: str | None, attrs: dict[str, str]) -> int | None:
+    if body is None:
+        return None
+    if (attrs.get("xsi:nil") or attrs.get("nil") or "").lower() in {"true", "1"}:
+        return None
+    value = numeric_text(_RAW_TAG_RE.sub("", body))
+    if value is None:
+        return None
+    try:
+        scale = int(attrs.get("scale") or 0)
+    except ValueError:
+        scale = 0
+    if attrs.get("sign") == "-" and value > 0:
+        value = -value
+    return int(round(value * (10 ** scale)))
+
+
+def parse_ixbrl_facts_regex(document: str, period: str) -> dict[str, int | None]:
+    """Regex-first extraction avoids HTML tree repair dropping inline-XBRL facts."""
+    instants = regex_context_instants(document)
+    target = quarter_end(period)
+    out = empty_note_values()
+
+    for match in _RAW_FACT_RE.finditer(document):
+        attrs = raw_attrs(match.group("attrs") or match.group("selfattrs") or "")
+        if instants.get(attrs.get("contextref", "")) != target:
+            continue
+
+        concept = attrs.get("name", "")
+        local = canon(concept.split(":")[-1])
+        value = raw_fact_value(match.group("body"), attrs)
+        if value is None:
+            continue
+
+        around = document[
+            max(0, match.start() - 900): min(len(document), match.end() + 900)
+        ]
+        around_text = canon(_RAW_TAG_RE.sub(" ", around))
+
+        if "contractliabilit" in local:
+            is_noncurrent = (
+                "noncurrent" in local
+                or "非流動負債" in around_text
+                or "noncurrentliabilit" in around_text
+            )
+            is_current = (
+                not is_noncurrent
+                and (
+                    "currentcontractliabilit" in local
+                    or "contractliabilitiescurrent" in local
+                    or "流動負債" in around_text
+                    or "currentliabilit" in around_text
+                )
+            )
+            if is_noncurrent:
+                merge_value(out, "contractNoncurrent", value)
+            elif is_current:
+                merge_value(out, "contractCurrent", value)
+            else:
+                merge_value(out, "contractTotal", value)
+            continue
+
+        is_customer_receipt = any(
+            token in local
+            for token in (
+                "temporaryreceiptsfromcustomer",
+                "temporaryreceiptsfromcustomers",
+                "customeradvances",
+                "advancesfromcustomer",
+                "advancesfromcustomers",
+            )
+        )
+        if is_customer_receipt:
+            is_noncurrent = "noncurrent" in local
+            is_current = not is_noncurrent and "current" in local
+            if is_noncurrent:
+                merge_value(out, "customerReceiptsNoncurrent", value)
+            elif is_current:
+                merge_value(out, "customerReceiptsCurrent", value)
+            else:
+                merge_value(out, "customerReceiptsTotal", value)
+
+    if (
+        out["contractTotal"] is None
+        and out["contractCurrent"] is not None
+        and out["contractNoncurrent"] is not None
+    ):
+        out["contractTotal"] = out["contractCurrent"] + out["contractNoncurrent"]
+    if (
+        out["customerReceiptsTotal"] is None
+        and out["customerReceiptsCurrent"] is not None
+        and out["customerReceiptsNoncurrent"] is not None
+    ):
+        out["customerReceiptsTotal"] = (
+            out["customerReceiptsCurrent"] + out["customerReceiptsNoncurrent"]
+        )
+    return out
+
+
+def parse_ixbrl_html_dom(html: str, period: str) -> dict[str, int | None]:
     soup = BeautifulSoup(html, "html.parser")
     instants = context_instants(soup)
     target = quarter_end(period)
@@ -355,6 +496,34 @@ def parse_ixbrl_html(html: str, period: str) -> dict[str, int | None]:
     return out
 
 
+def parse_ixbrl_html(html: str, period: str) -> dict[str, int | None]:
+    """Use raw facts first; visible-table parsing only fills remaining gaps."""
+    primary = parse_ixbrl_facts_regex(html, period)
+    fallback = parse_ixbrl_html_dom(html, period)
+    for key, value in fallback.items():
+        if primary.get(key) is None and value is not None:
+            primary[key] = value
+
+    if (
+        primary["contractTotal"] is None
+        and primary["contractCurrent"] is not None
+        and primary["contractNoncurrent"] is not None
+    ):
+        primary["contractTotal"] = (
+            primary["contractCurrent"] + primary["contractNoncurrent"]
+        )
+    if (
+        primary["customerReceiptsTotal"] is None
+        and primary["customerReceiptsCurrent"] is not None
+        and primary["customerReceiptsNoncurrent"] is not None
+    ):
+        primary["customerReceiptsTotal"] = (
+            primary["customerReceiptsCurrent"]
+            + primary["customerReceiptsNoncurrent"]
+        )
+    return primary
+
+
 def debug_ixbrl_html(html: str, period: str) -> list[str]:
     """Compact diagnostics for one real filing; avoids dumping the document."""
     soup = BeautifulSoup(html, "html.parser")
@@ -428,10 +597,7 @@ def ixbrl_documents(content: bytes) -> list[str]:
     for blob in blobs:
         if b"ix:nonFraction" not in blob and b"ix:nonfraction" not in blob.lower():
             continue
-        try:
-            docs.append(blob.decode("utf-8"))
-        except UnicodeDecodeError:
-            docs.append(blob.decode("utf-8", errors="ignore"))
+        docs.append(decode_ixbrl_bytes(blob))
     return docs
 
 
@@ -745,9 +911,48 @@ class NoteClient:
         return pdf.content, filename
 
     def download(self, code: str, period: str) -> tuple[bytes, str]:
-        year, quarter = period.split("Q")
+        """Fetch the complete official inline-XBRL filing, consolidated first."""
+        year, quarter_text = period.split("Q")
+        quarter = int(quarter_text)
         last_error: Exception | None = None
 
+        for report_id in ("C", "A"):
+            params = {
+                "step": "1",
+                "CO_ID": code,
+                "SYEAR": year,
+                "SSEASON": str(quarter),
+                "REPORT_ID": report_id,
+            }
+            for attempt in range(3):
+                if attempt:
+                    time.sleep(1.5 * attempt)
+                self.wait()
+                try:
+                    response = self.session.get(
+                        IXBRL_URL,
+                        params=params,
+                        timeout=60,
+                        allow_redirects=True,
+                        headers={
+                            "Referer": f"{MOPSOV}/mops/web/t203sb01",
+                            "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+                        },
+                    )
+                    response.raise_for_status()
+                    content = response.content
+                    decoded = decode_ixbrl_bytes(content)
+                    if "檔案不存在" in decoded:
+                        break
+                    if re.search(r"<ix:nonfraction\\b", decoded, re.I):
+                        return content, report_id
+                    last_error = RuntimeError(
+                        "官方 t164sb01 回傳內容不是完整 iXBRL"
+                    )
+                except requests.RequestException as exc:
+                    last_error = exc
+
+        # Old download contract is kept only as a compatibility fallback.
         for report_id in ("C", "A"):
             url = DOWNLOAD_URL.format(
                 code=code,
@@ -755,30 +960,28 @@ class NoteClient:
                 quarter=quarter,
                 report_id=report_id,
             )
-            for attempt in range(3):
-                if attempt:
-                    time.sleep(1.5 * attempt)
-                self.wait()
-                try:
-                    response = self.session.get(
-                        url,
-                        timeout=60,
-                        allow_redirects=True,
-                        headers={
-                            "Referer": f"{MOPSOV}/mops/web/t203sb01",
-                            "Accept": "text/html,application/xhtml+xml,application/zip,*/*;q=0.8",
-                        },
-                    )
-                    response.raise_for_status()
-                    content = response.content
-                    if content[:2] == b"PK" or b"ix:nonFraction" in content or b"ix:nonfraction" in content.lower():
-                        return content, report_id
-                    last_error = RuntimeError("官方回傳內容不是 iXBRL/ZIP")
-                except requests.RequestException as exc:
-                    last_error = exc
+            self.wait()
+            try:
+                response = self.session.get(
+                    url,
+                    timeout=60,
+                    allow_redirects=True,
+                    headers={
+                        "Referer": f"{MOPSOV}/mops/web/t203sb01",
+                        "Accept": "text/html,application/xhtml+xml,application/zip,*/*;q=0.8",
+                    },
+                )
+                response.raise_for_status()
+                content = response.content
+                decoded = decode_ixbrl_bytes(content)
+                if content[:2] == b"PK" or re.search(
+                    r"<ix:nonfraction\\b", decoded, re.I
+                ):
+                    return content, report_id
+            except requests.RequestException as exc:
+                last_error = exc
 
         raise RuntimeError(f"{code} {period} iXBRL 下載失敗：{last_error}")
-
 
 def parse_report(content: bytes, period: str) -> dict[str, int | None]:
     docs = ixbrl_documents(content)
