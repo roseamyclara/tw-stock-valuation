@@ -745,24 +745,39 @@ def parse_pdf_note_text(text: str, period: str) -> dict[str, int | None]:
         else:
             merge_value(out, "contractTotal", value)
 
-    for index, line in enumerate(lines):
-        if not is_customer_receipt_text(line):
-            continue
-        section = lines[index : index + 28]
+    # PDF text extraction often splits "暫收客戶款" and its table across
+    # several lines. Find the section with a sliding window instead of
+    # requiring the whole heading to survive on one extracted line.
+    customer_starts: list[int] = []
+    for index in range(len(lines)):
+        heading_window = " ".join(lines[index : index + 3])
+        if is_customer_receipt_text(heading_window):
+            customer_starts.append(index)
+
+    for index in customer_starts:
+        section = lines[index : index + 60]
         for offset, row_text in enumerate(section):
+            # A new Chinese-numbered subsection such as （四） ends （三）.
+            # Do not stop on Arabic-numbered explanatory bullets like (1).
             if (
-                offset > 0
-                and re.match(r"^[（(]?[一二三四五六七八九十\d]+[）).、]", row_text)
-                and not is_customer_receipt_text(row_text)
+                offset > 3
+                and re.match(r"^[（(][一二三四五六七八九十]+[）)]", row_text)
+                and not is_customer_receipt_text(
+                    " ".join(section[offset : offset + 3])
+                )
             ):
                 break
+
             liq = liquidity(row_text)
             if liq not in {"current", "noncurrent"}:
                 continue
-            raw = first_money_after_label(row_text, 0, window=len(row_text))
-            if raw is None and offset + 1 < len(section):
-                combined = row_text + " " + section[offset + 1]
-                raw = first_money_after_label(combined, 0, window=len(combined))
+
+            # Keep classification tied to the label line, but allow the number
+            # to land one or two lines later after PDF table extraction.
+            amount_block = " ".join(section[offset : offset + 3])
+            raw = first_money_after_label(
+                amount_block, 0, window=len(amount_block)
+            )
             if raw is None:
                 continue
             key = (
@@ -776,7 +791,8 @@ def parse_pdf_note_text(text: str, period: str) -> dict[str, int | None]:
             out["customerReceiptsCurrent"] is None
             and out["customerReceiptsNoncurrent"] is None
         ):
-            block = " ".join(section[:4])
+            # Some issuers disclose only a total immediately after the heading.
+            block = " ".join(section[:8])
             raw = first_money_after_label(block, 0, window=len(block))
             if raw is not None:
                 merge_value(out, "customerReceiptsTotal", raw * multiplier)
@@ -1079,6 +1095,20 @@ def parse_report(content: bytes, period: str) -> dict[str, int | None]:
         parsed = parse_ixbrl_html(doc, period)
         for key, value in parsed.items():
             merge_value(merged, key, value)
+
+        if (
+            merged.get("contractCurrent") is None
+            or merged.get("customerReceiptsTotal") is None
+        ):
+            visible_text = BeautifulSoup(doc, "html.parser").get_text("\n")
+            if is_contract_text(visible_text) or is_customer_receipt_text(visible_text):
+                try:
+                    visible_values = parse_pdf_note_text(visible_text, period)
+                except ValueError:
+                    visible_values = empty_note_values()
+                for key, value in visible_values.items():
+                    if merged.get(key) is None and value is not None:
+                        merged[key] = value
     return merged
 
 
