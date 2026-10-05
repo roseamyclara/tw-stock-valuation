@@ -252,15 +252,15 @@ def merge_value(out: dict[str, int | None], key: str, value: int | None) -> None
         out[key] = None
 
 
-_RAW_ATTR_RE = re.compile(r"""([\\w:-]+)\\s*=\\s*["']([^"']*)["']""", re.I)
+_RAW_ATTR_RE = re.compile(r"""([\w:-]+)\s*=\s*["']([^"']*)["']""", re.I)
 _RAW_CONTEXT_RE = re.compile(
-    r'<xbrli:context\\b(?P<attrs>[^>]*)>(?P<body>.*?)</xbrli:context>',
+    r'<xbrli:context\b(?P<attrs>[^>]*)>(?P<body>.*?)</xbrli:context>',
     re.I | re.S,
 )
 _RAW_INSTANT_RE = re.compile(r'<xbrli:instant>([^<]+)</xbrli:instant>', re.I)
 _RAW_FACT_RE = re.compile(
-    r'<ix:nonfraction\\b(?P<attrs>[^>]*)>(?P<body>.*?)</ix:nonfraction>'
-    r'|<ix:nonfraction\\b(?P<selfattrs>[^>]*)/>',
+    r'<ix:nonfraction\b(?P<attrs>[^>]*)>(?P<body>.*?)</ix:nonfraction>'
+    r'|<ix:nonfraction\b(?P<selfattrs>[^>]*)/>',
     re.I | re.S,
 )
 _RAW_TAG_RE = re.compile(r'<[^>]+>', re.S)
@@ -287,7 +287,7 @@ def regex_context_instants(document: str) -> dict[str, str]:
         if not context_id or not instant:
             continue
         value = instant.group(1).strip()
-        if re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", value):
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
             out[context_id] = value
     return out
 
@@ -946,7 +946,7 @@ class NoteClient:
                     decoded = decode_ixbrl_bytes(content)
                     if "檔案不存在" in decoded:
                         break
-                    if re.search(r"<ix:nonfraction\\b", decoded, re.I):
+                    if re.search(r"<ix:nonfraction\b", decoded, re.I):
                         return content, report_id
                     last_error = RuntimeError(
                         "官方 t164sb01 回傳內容不是完整 iXBRL"
@@ -977,7 +977,7 @@ class NoteClient:
                 content = response.content
                 decoded = decode_ixbrl_bytes(content)
                 if content[:2] == b"PK" or re.search(
-                    r"<ix:nonfraction\\b", decoded, re.I
+                    r"<ix:nonfraction\b", decoded, re.I
                 ):
                     return content, report_id
             except requests.RequestException as exc:
