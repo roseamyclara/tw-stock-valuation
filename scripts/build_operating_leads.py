@@ -634,16 +634,26 @@ def merge_balance_sheet(
             continue
         ensure_doc(docs.setdefault(code, {}), code, meta)
         row = docs[code]["periods"].setdefault(period, {})
-        for key in (
-            "contractCurrent",
-            "contractNoncurrent",
-            "contractTotal",
-            "inventory",
-        ):
-            row[key] = item.get(key)
+        for key in ("contractCurrent", "contractNoncurrent", "contractTotal", "inventory"):
+            value = item.get(key)
+            # A face-statement omission is not a deletion of a verified note.
+            if value is None and row.get(key) is not None:
+                continue
+            row[key] = value
+            if key.startswith("contract"):
+                row[f"{key}Source"] = "balance_sheet" if value is not None else None
+        row["data_source"] = next(
+            (row.get(f"{key}Source") for key in ("contractCurrent", "contractTotal", "contractNoncurrent")
+             if row.get(key) is not None), None)
+        if row["data_source"] in {"ixbrl_notes", "pdf_notes"}:
+            row["data_source"] = "notes"
+        for key in ("customerReceiptsCurrent", "customerReceiptsNoncurrent", "customerReceiptsTotal"):
+            row.setdefault(key, None)
         row["balanceSheetBasis"] = "financial_statement"
         status = row.setdefault("status", {})
-        status.update(item.get("status") or {})
+        for key, value in (item.get("status") or {}).items():
+            if item.get(key) is not None or row.get(key) is None:
+                status[key] = value
 
         industry = str(meta[code].get("i") or "")
         if (
@@ -709,6 +719,7 @@ def build_latest(
         total_period = newest(periods, "contractTotal")
         inventory_period = newest(periods, "inventory")
         revenue_period = newest(periods, "revenue")
+        customer_receipts_period = newest(periods, "customerReceiptsTotal")
 
         stocks[code] = {
             "n": stock.get("n"),
@@ -750,6 +761,33 @@ def build_latest(
             "revenueChange": change(
                 periods, revenue_period, "revenue"
             ),
+            "customerReceiptsPeriod": customer_receipts_period,
+            "customerReceiptsTotal": (
+                (periods.get(customer_receipts_period) or {}).get("customerReceiptsTotal")
+                if customer_receipts_period
+                else None
+            ),
+            "customerReceiptsCurrent": (
+                (periods.get(customer_receipts_period) or {}).get("customerReceiptsCurrent")
+                if customer_receipts_period
+                else None
+            ),
+            "customerReceiptsNoncurrent": (
+                (periods.get(customer_receipts_period) or {}).get("customerReceiptsNoncurrent")
+                if customer_receipts_period
+                else None
+            ),
+            "customerReceiptsChange": change(
+                periods, customer_receipts_period, "customerReceiptsTotal"
+            ),
+            "data_source": (
+                (periods.get(contract_period or total_period) or {}).get("data_source")
+            ),
+            "contractCurrentSource": (
+                (periods.get(contract_period) or {}).get("contractCurrentSource")
+                if contract_period
+                else None
+            ),
         }
 
     return {
@@ -761,8 +799,12 @@ def build_latest(
         },
         "notes": {
             "contract": (
-                "預設使用合約負債－流動；總合約負債只在公司明列總額，"
-                "或流動與非流動皆有明確數值時提供。"
+                "預設使用合約負債－流動。若資產負債表主表未單獨列示，"
+                "會再以官方 iXBRL 財報附註補充；主表與附註來源會分開標記。"
+            ),
+            "customerReceipts": (
+                "客戶暫收款為獨立先行指標，與合約負債分開保存，"
+                "合計僅供營運觀察，非會計科目；任一項缺值時合計為 null。"
             ),
             "missing": (
                 "null 代表未單獨揭露、不適用或該期沒有資料，不會改寫為 0。"
@@ -853,6 +895,7 @@ def main() -> int:
     if not meta:
         raise SystemExit("latest.json 沒有可用股票母體")
 
+    all_meta = {str(row["c"]): row for row in latest if len(str(row.get("c", ""))) == 4 and str(row.get("c", "")).isdigit()}
     codes = sorted(meta)
     docs = load_docs(codes)
     http = Http()
@@ -915,7 +958,7 @@ def main() -> int:
     save_docs(codes, meta, docs)
     write_json(
         LATEST_OUT,
-        build_latest(meta, docs),
+        build_latest(all_meta, load_docs(sorted(all_meta))),
         compact=True,
     )
     log(f"完成：{len(meta)} 檔；輸出 {LATEST_OUT}")

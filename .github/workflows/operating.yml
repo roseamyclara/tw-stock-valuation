@@ -4,26 +4,43 @@ on:
   schedule:
     - cron: "20 3 * * 0"
       timezone: "Asia/Taipei"
+
+  # main 合併後持續自動更新；功能分支在開發期間也必須真正產生資料，
+  # 否則 PR smoke test 雖能驗證 Q2，產出的 JSON 會隨 runner 結束而消失。
   push:
     branches:
       - main
+      - feature/operating-leads-v2
     paths:
       - "scripts/build_operating_leads.py"
+      - "scripts/build_note_disclosures.py"
       - "scripts/test_operating_leads.py"
+      - "scripts/test_note_disclosures.py"
+      - "scripts/validate_operating.py"
+      - "scripts/fixtures/**"
+      - ".github/workflows/note-backfill.yml"
       - "docs/assets/app.js"
       - "docs/assets/style.css"
       - "docs/index.html"
       - "requirements.txt"
       - ".github/workflows/operating.yml"
+
+  # PR 只做快速驗證，不在 PR job 內 commit，避免測試 job 改動分支。
   pull_request:
     paths:
       - "scripts/build_operating_leads.py"
+      - "scripts/build_note_disclosures.py"
       - "scripts/test_operating_leads.py"
+      - "scripts/test_note_disclosures.py"
+      - "scripts/validate_operating.py"
+      - "scripts/fixtures/**"
+      - ".github/workflows/note-backfill.yml"
       - "docs/assets/app.js"
       - "docs/assets/style.css"
       - "docs/index.html"
       - "requirements.txt"
       - ".github/workflows/operating.yml"
+
   workflow_dispatch:
     inputs:
       full_backfill:
@@ -45,13 +62,15 @@ permissions:
   contents: write
 
 concurrency:
-  group: operating-leads-update
-  cancel-in-progress: false
+  # 分支各自排隊，避免 PR smoke test 阻塞正式 main 更新。
+  group: operating-leads-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+
     steps:
       - uses: actions/checkout@v4
 
@@ -64,36 +83,83 @@ jobs:
 
       - name: 單元測試
         working-directory: scripts
-        run: python -m unittest -v test_operating_leads.py
+        run: python -m unittest -v test_operating_leads.py test_note_disclosures.py
 
       - name: 前端 JavaScript 語法檢查
         run: node --check docs/assets/app.js
 
+      # PR job 確認百德已能讀到 2026Q2，且既有 benchmark 不被破壞。
+      # 這一步只測試，不負責保存資料。
       - name: 百德 4563 官方資料 smoke test
         if: github.event_name == 'pull_request'
         working-directory: scripts
         run: python build_operating_leads.py --years 2 --codes 4563
 
+      - name: 台積電 2330 附註 smoke test
+        if: github.event_name == 'pull_request'
+        working-directory: scripts
+        run: |
+          python build_operating_leads.py --years 1 --codes 2330
+          python build_note_disclosures.py --codes 2330 --max-requests 1 --max-pdf 1 --refresh --require-tsmc
+
+      # 開發分支只跑已知基準個股，快速驗證解析器；main 才做全市場正式資料。
       - name: 更新合約負債、存貨與營收
         if: github.event_name != 'pull_request'
         working-directory: scripts
         shell: bash
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.full_backfill }}" == "true" ]]; then
+          set -euo pipefail
+
+          if [[ "${{ github.ref }}" == "refs/heads/feature/operating-leads-v2" ]]; then
+            echo "功能分支 smoke：只抓 4563、2330"
+            python build_operating_leads.py --years 2 --codes 4563,2330
+
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.full_backfill }}" == "true" ]]; then
+            echo "手動完整回補 ${{ github.event.inputs.years || '5' }} 年"
             python build_operating_leads.py --years "${{ github.event.inputs.years || '5' }}"
-          elif [[ ! -f ../docs/data/operating_latest.json ]]; then
-            echo "第一次建立資料，先完整回補 3 年；需要更長歷史可手動選 5/8 年"
+
+          elif ! python -c 'from build_operating_leads import read_json, LATEST_OUT; stocks = (read_json(LATEST_OUT, {}) or {}).get("stocks", {}); assert stocks and sum(s.get("inventory") is not None or s.get("revenue") is not None for s in stocks.values()) >= len(stocks) * 0.9'; then
+            echo "全市場營運資料尚未完整建立：回補 3 年，避免把功能分支的兩檔基準資料當成全市場已完成"
             python build_operating_leads.py --years 3
+
           else
+            echo "已有歷史資料：只刷新最近已完成財報季與營收趨勢"
             python build_operating_leads.py --years 5 --latest-only
           fi
 
-      - name: commit 資料
+      - name: 補抓官方 iXBRL 財報附註
         if: github.event_name != 'pull_request'
+        working-directory: scripts
+        shell: bash
         run: |
+          set -euo pipefail
+
+          if [[ "${{ github.ref }}" == "refs/heads/feature/operating-leads-v2" ]]; then
+            # 開發時立即驗證台積電附註，不等待全市場。
+            python build_note_disclosures.py --codes 2330 --max-requests 1 --refresh --require-tsmc
+          else
+            # 台積電是已知「主表不單列合約負債、附註才揭露」的基準案例。
+            # 固定驗證 2026Q2，之後的新季度由漸進佇列處理。
+            python build_note_disclosures.py --codes 2330 --max-requests 1 --refresh --require-tsmc
+
+            # 其餘公司漸進補抓最新財報季；notesChecked 會避免反覆重抓。
+            python build_note_disclosures.py --max-requests 120 --max-pdf 8
+          fi
+
+      - name: 驗證台積電附註與百德主表來源及金額
+        working-directory: scripts
+        run: python validate_operating.py
+
+      - name: commit 營運資料
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add docs/data/operating docs/data/operating_latest.json
+
           if git diff --staged --quiet; then
             echo "營運指標無變化，跳過 commit"
           else

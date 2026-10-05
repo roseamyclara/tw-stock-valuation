@@ -1,0 +1,70 @@
+name: 財報附註漸進回補
+
+on:
+  schedule:
+    # 台北凌晨跑，避開盤中與主要每日更新時段。
+    - cron: "40 2 * * *"
+      timezone: "Asia/Taipei"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: note-disclosure-backfill
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: 檢查營運資料是否已建立
+        id: ready
+        shell: bash
+        run: |
+          if [[ -f docs/data/operating_latest.json ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "尚未建立 operating_latest.json，先等待營運先行指標主流程"
+          fi
+
+      - name: 漸進補抓官方附註
+        if: steps.ready.outputs.ready == 'true'
+        working-directory: scripts
+        run: |
+          # iXBRL 可以較快批次掃；PDF 對官方站台負擔較大，因此每日限額。
+          # 未輪到 PDF 的公司會保留 pending_pdf，隔天自動接續，不會被誤標為沒有。
+          python build_note_disclosures.py --max-requests 180 --max-pdf 18
+
+      - name: 驗證台積電與百德資料後才發布
+        if: steps.ready.outputs.ready == 'true'
+        working-directory: scripts
+        run: python validate_operating.py
+
+      - name: commit 附註資料
+        if: steps.ready.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data/operating docs/data/operating_latest.json
+          if git diff --staged --quiet; then
+            echo "附註資料無變化"
+          else
+            git commit -m "漸進補回財報附註 $(TZ=Asia/Taipei date +%Y-%m-%d)"
+            git push
+          fi

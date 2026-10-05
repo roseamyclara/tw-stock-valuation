@@ -1066,7 +1066,7 @@ td.ind { white-space: normal; max-width: 280px; }
 /* ============================================================ 營運先行指標 */
 .op-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin: 12px 0;
 }
@@ -1124,7 +1124,6 @@ td.ind { white-space: normal; max-width: 280px; }
   gap: 12px;
 }
 .op-chart-grid > .card { min-width: 0; padding: 14px; }
-.op-chart-grid > .card:last-child { grid-column: 1 / -1; }
 .op-chart-head {
   display: flex;
   justify-content: space-between;
@@ -1138,7 +1137,6 @@ td.ind { white-space: normal; max-width: 280px; }
 @media (max-width: 700px) {
   .op-summary { grid-template-columns: 1fr; }
   .op-chart-grid { grid-template-columns: 1fr; }
-  .op-chart-grid > .card:last-child { grid-column: auto; }
   .op-controls { width: 100%; }
   .op-controls button { flex: 1 1 0; }
 }
