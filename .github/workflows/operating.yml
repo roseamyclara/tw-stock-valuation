@@ -94,7 +94,7 @@ jobs:
         working-directory: scripts
         run: |
           python build_operating_leads.py --years 1 --codes 2330
-          python build_note_disclosures.py --codes 2330 --max-requests 1 --require-tsmc
+          python build_note_disclosures.py --codes 2330 --max-requests 1 --max-pdf 1 --require-tsmc
 
       # 開發分支只跑已知基準個股，快速驗證解析器；main 才做全市場正式資料。
       - name: 更新合約負債、存貨與營收
@@ -137,7 +137,7 @@ jobs:
             python build_note_disclosures.py --codes 2330 --max-requests 1 --require-tsmc
 
             # 其餘公司漸進補抓最新財報季；notesChecked 會避免反覆重抓。
-            python build_note_disclosures.py --max-requests 120
+            python build_note_disclosures.py --max-requests 120 --max-pdf 8
           fi
 
       - name: 驗證最新資料已包含應有季度
