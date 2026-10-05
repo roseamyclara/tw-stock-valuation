@@ -163,6 +163,9 @@ def context_instants(soup: BeautifulSoup) -> dict[str, str]:
         context_id = str(attr_ci(ctx, "id") or "").strip()
         if not context_id:
             continue
+        # Segment/product/member facts are not company-wide balances.
+        if ctx.find(lambda node: str(getattr(node, "name", "")).lower().endswith(("explicitmember", "typedmember"))):
+            continue
         instant = ctx.find(is_instant)
         if instant:
             value = " ".join(instant.stripped_strings).strip()
@@ -200,19 +203,14 @@ def is_contract_text(text: str) -> bool:
 def is_customer_receipt_text(text: str) -> bool:
     c = canon(text)
     chinese = (
-        ("客戶" in c and ("暫收" in c or "預收" in c))
+        ("客戶" in c and "暫收" in c)
         or "暫收客戶款" in c
-        or "預收客戶款" in c
     )
     english = any(
         phrase in c
         for phrase in (
             "temporaryreceiptsfromcustomer",
             "temporaryreceiptsfromcustomers",
-            "customeradvances",
-            "advancesfromcustomer",
-            "advancesfromcustomers",
-            "customerdeposits",
         )
     )
     return chinese or english
@@ -248,15 +246,23 @@ def unique_target_value(row, instants: dict[str, str], target_date: str) -> int 
     return None
 
 
+class NoteValues(dict):
+    """Keep ambiguity sticky even if a third duplicate repeats an earlier value."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.conflicts = set()
+
+
 def merge_value(out: dict[str, int | None], key: str, value: int | None) -> None:
-    if value is None:
+    if value is None or key in getattr(out, "conflicts", set()):
         return
     old = out.get(key)
     if old is None:
         out[key] = value
     elif old != value:
-        # Multiple documents/tables disagreeing is a hard ambiguity; remove it.
         out[key] = None
+        if isinstance(out, NoteValues):
+            out.conflicts.add(key)
 
 
 _RAW_ATTR_RE = re.compile(r"""([\w:-]+)\s*=\s*["']([^"']*)["']""", re.I)
@@ -290,6 +296,8 @@ def regex_context_instants(document: str) -> dict[str, str]:
     for match in _RAW_CONTEXT_RE.finditer(document):
         attrs = raw_attrs(match.group("attrs"))
         context_id = attrs.get("id")
+        if re.search(r"<(?:[\w-]+:)?(?:explicitMember|typedMember)\b", match.group("body"), re.I):
+            continue
         instant = _RAW_INSTANT_RE.search(match.group("body"))
         if not context_id or not instant:
             continue
@@ -368,10 +376,7 @@ def parse_ixbrl_facts_regex(document: str, period: str) -> dict[str, int | None]
             for token in (
                 "temporaryreceiptsfromcustomer",
                 "temporaryreceiptsfromcustomers",
-                "customeradvances",
-                "advancesfromcustomer",
-                "advancesfromcustomers",
-            )
+                        )
         )
         if is_customer_receipt:
             is_noncurrent = "noncurrent" in local
@@ -433,14 +438,7 @@ def parse_ixbrl_html_dom(html: str, period: str) -> dict[str, int | None]:
     instants = context_instants(soup)
     target = quarter_end(period)
 
-    out: dict[str, int | None] = {
-        "contractCurrent": None,
-        "contractNoncurrent": None,
-        "contractTotal": None,
-        "customerReceiptsCurrent": None,
-        "customerReceiptsNoncurrent": None,
-        "customerReceiptsTotal": None,
-    }
+    out: dict[str, int | None] = empty_note_values()
 
     for table in soup.find_all("table"):
         context = previous_context(table)
@@ -538,7 +536,7 @@ def parse_ixbrl_html(html: str, period: str) -> dict[str, int | None]:
     primary = parse_ixbrl_facts_regex(html, period)
     fallback = parse_ixbrl_html_dom(html, period)
     for key, value in fallback.items():
-        if primary.get(key) is None and value is not None:
+        if key not in primary.conflicts and primary.get(key) is None and value is not None:
             primary[key] = value
 
     if (
@@ -640,14 +638,14 @@ def ixbrl_documents(content: bytes) -> list[str]:
 
 
 def empty_note_values() -> dict[str, int | None]:
-    return {
+    return NoteValues({
         "contractCurrent": None,
         "contractNoncurrent": None,
         "contractTotal": None,
         "customerReceiptsCurrent": None,
         "customerReceiptsNoncurrent": None,
         "customerReceiptsTotal": None,
-    }
+    })
 
 
 def note_values_present(values: dict[str, int | None]) -> bool:
@@ -699,6 +697,10 @@ def report_filename_from_book_html(html: str, code: str, period: str) -> str | N
 
 def pdf_amount_multiplier(text: str) -> int:
     compact = canon(text)
+    if "millionsofnewtaiwandollars" in compact:
+        return 1_000_000
+    if "thousandsofnewtaiwandollars" in compact:
+        return 1_000
     if "百萬元" in compact:
         return 1_000_000
     if "仟元" in compact or "千元" in compact:
@@ -715,114 +717,96 @@ def first_money_after_label(text: str, label_start: int, window: int = 420) -> i
 
 
 
+# Text fallback accepts only dated table rows, never numbers from prose.
+_DATE_RE = re.compile(r"(\d{3,4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日")
+_MONEY_RE = re.compile(r"(?<![\w.])(?:\(?-?\d{1,3}(?:,\d{3})+(?:\.\d+)?\)?|\(?-?\d+(?:\.\d+)?\)?|[—–-])(?![\w.])")
+
+
+def table_dates(text: str) -> list[str]:
+    dates = []
+    for year, month, day in _DATE_RE.findall(text):
+        y = int(year)
+        dates.append(f"{y + 1911 if y < 1911 else y:04d}-{int(month):02d}-{int(day):02d}")
+    # English reports use Month DD, YYYY column headings.
+    for match in re.finditer(r"(March|June|September|December)\s+(\d{1,2}),?\s+(\d{4})", text, re.I):
+        month = {"march": 3, "june": 6, "september": 9, "december": 12}[match[1].lower()]
+        dates.append(f"{int(match[3]):04d}-{month:02d}-{int(match[2]):02d}")
+    return dates
+
+
 def parse_pdf_note_text(text: str, period: str) -> dict[str, int | None]:
     multiplier = pdf_amount_multiplier(text)
     out = empty_note_values()
-    lines = [
-        re.sub(r"\s+", " ", line).strip()
-        for line in text.replace("\u3000", " ").splitlines()
-        if line.strip()
-    ]
-
-    for index, line in enumerate(lines):
-        if not is_contract_text(line):
+    target = quarter_end(period)
+    lines = [re.sub(r"\s+", " ", line).strip() for line in text.splitlines() if line.strip()]
+    dates: list[str] = []
+    customer_section = False
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        index += 1
+        # PDF labels commonly wrap inside a parenthetical classification.
+        for _ in range(2):
+            if canon(line).count("(") <= canon(line).count(")") or index >= len(lines):
+                break
+            line += " " + lines[index]
+            index += 1
+        found_dates = table_dates(line)
+        if found_dates:
+            dates = found_dates
+            # Extraction can put each date on its own line.
+            while index < len(lines) and table_dates(lines[index]):
+                dates.extend(table_dates(lines[index]))
+                index += 1
             continue
-        block = " ".join(lines[index : index + 4])
-        label_start = block.find("合約負債")
-        if label_start < 0:
-            label_start = block.lower().find("contract liabil")
-        if label_start < 0:
+        if re.match(r"^[（(][一二三四五六七八九十]+[）)]", line):
+            customer_section = is_customer_receipt_text(line)
+            dates = []
             continue
-        raw = first_money_after_label(block, label_start)
+        if is_customer_receipt_text(line) and not _MONEY_RE.search(line):
+            customer_section = True
+            dates = []
+            continue
+        if target not in dates or len(dates) < 2 or len(set(dates)) != len(dates):
+            continue
+        is_contract = is_contract_text(line)
+        is_customer = is_customer_receipt_text(line) or customer_section
+        # No recognition of revenue rollforwards, generic deposits or narrative.
+        label = re.split(r"\$|(?<!\w)\d{1,3},\d{3}", line, maxsplit=1)[0]
+        if is_contract:
+            if not re.match(r"^(?:合約負債|contract\s+liabilit)", line, re.I):
+                continue
+            key_prefix = "contract"
+        elif is_customer and (liquidity(label) or canon(label) in {"合計", "total", ""}):
+            key_prefix = "customerReceipts"
+        else:
+            continue
+        # Label may wrap before the table amounts. Stop at another labelled row.
+        block = line
+        while index < len(lines) and len(_MONEY_RE.findall(block)) < len(dates):
+            following = lines[index]
+            if table_dates(following) or is_contract_text(following) or liquidity(following):
+                break
+            if re.search(r"[0-9,]", following) and not re.fullmatch(r"[\d,.$()\s—–-]+", following):
+                break
+            block += " " + following
+            index += 1
+        amounts = _MONEY_RE.findall(block)
+        if len(amounts) != len(dates):
+            continue
+        raw = numeric_text(amounts[dates.index(target)])
         if raw is None:
             continue
-        value = raw * multiplier
-        liq = liquidity(block)
-        if liq == "noncurrent":
-            merge_value(out, "contractNoncurrent", value)
-        elif liq == "current":
-            merge_value(out, "contractCurrent", value)
-        else:
-            merge_value(out, "contractTotal", value)
-
-    # PDF text extraction often splits "暫收客戶款" and its table across
-    # several lines. Find the section with a sliding window instead of
-    # requiring the whole heading to survive on one extracted line.
-    customer_starts: list[int] = []
-    for index in range(len(lines)):
-        heading_window = " ".join(lines[index : index + 3])
-        if is_customer_receipt_text(heading_window):
-            customer_starts.append(index)
-
-    for index in customer_starts:
-        section = lines[index : index + 60]
-        for offset, row_text in enumerate(section):
-            # A new Chinese-numbered subsection such as （四） ends （三）.
-            # Do not stop on Arabic-numbered explanatory bullets like (1).
-            if (
-                offset > 3
-                and re.match(r"^[（(][一二三四五六七八九十]+[）)]", row_text)
-                and not is_customer_receipt_text(
-                    " ".join(section[offset : offset + 3])
-                )
-            ):
-                break
-
-            liq = liquidity(row_text)
-            if liq not in {"current", "noncurrent"}:
-                continue
-
-            # Keep classification tied to the label line, but allow the number
-            # to land one or two lines later after PDF table extraction.
-            amount_block = " ".join(section[offset : offset + 3])
-            raw = first_money_after_label(
-                amount_block, 0, window=len(amount_block)
-            )
-            if raw is None:
-                continue
-            key = (
-                "customerReceiptsNoncurrent"
-                if liq == "noncurrent"
-                else "customerReceiptsCurrent"
-            )
-            merge_value(out, key, raw * multiplier)
-
-        if (
-            out["customerReceiptsCurrent"] is None
-            and out["customerReceiptsNoncurrent"] is None
-        ):
-            # Some issuers disclose only a total immediately after the heading.
-            block = " ".join(section[:8])
-            raw = first_money_after_label(block, 0, window=len(block))
-            if raw is not None:
-                merge_value(out, "customerReceiptsTotal", raw * multiplier)
-
-    if (
-        out["contractTotal"] is None
-        and out["contractCurrent"] is not None
-        and out["contractNoncurrent"] is not None
-    ):
-        out["contractTotal"] = out["contractCurrent"] + out["contractNoncurrent"]
-    elif (
-        out["contractTotal"] is None
-        and out["contractCurrent"] is not None
-        and out["contractNoncurrent"] is None
-    ):
-        if any(
-            is_contract_text(line) and liquidity(line) == "current"
-            for line in lines
-        ):
-            out["contractTotal"] = out["contractCurrent"]
-
-    if (
-        out["customerReceiptsTotal"] is None
-        and out["customerReceiptsCurrent"] is not None
-        and out["customerReceiptsNoncurrent"] is not None
-    ):
-        out["customerReceiptsTotal"] = (
-            out["customerReceiptsCurrent"]
-            + out["customerReceiptsNoncurrent"]
-        )
+        liq = liquidity(label)
+        suffix = "Noncurrent" if liq == "noncurrent" else "Current" if liq == "current" else "Total"
+        merge_value(out, key_prefix + suffix, int(round(raw * multiplier)))
+        # A generic balance disclosed as classified within current liabilities
+        # is also an explicitly disclosed total, not an assumption of zero noncurrent.
+        if is_contract and re.search(r"合約負債[（(]|contract liabilit(?:y|ies)\s*\(", label, re.I):
+            merge_value(out, "contractTotal", int(round(raw * multiplier)))
+    for prefix in ("contract", "customerReceipts"):
+        if out[prefix + "Total"] is None and out[prefix + "Current"] is not None and out[prefix + "Noncurrent"] is not None:
+            out[prefix + "Total"] = out[prefix + "Current"] + out[prefix + "Noncurrent"]
     return out
 
 
@@ -835,36 +819,25 @@ def parse_pdf_report(content: bytes, period: str) -> dict[str, int | None]:
     note_pages: list[str] = []
     for page in document:
         try:
-            value = page.get_text("text") or ""
+            value = page.get_text("text", sort=True) or ""
         except Exception:  # noqa: BLE001
             value = ""
         if not value:
             continue
         if (
             len(unit_pages) < 3
-            and ("仟元" in value or "千元" in value or "百萬元" in value)
+            and ("仟元" in value or "千元" in value or "百萬元" in value or "thousands of new taiwan dollars" in value.lower())
         ):
             unit_pages.append(value)
         if is_contract_text(value) or is_customer_receipt_text(value):
             note_pages.append(value)
-
-        # Most disclosures put contract balances and customer receipts on the
-        # same note page. Once both labels are found and unit evidence exists,
-        # no reason remains to scan the rest of a 100+ page report.
-        combined_notes = "\n".join(note_pages)
-        if (
-            unit_pages
-            and is_contract_text(combined_notes)
-            and is_customer_receipt_text(combined_notes)
-        ):
-            break
 
     document.close()
     if not note_pages:
         raise ValueError("財報 PDF 文字層找不到合約負債或客戶暫收／預收附註")
 
     return parse_pdf_note_text(
-        "\n".join(unit_pages + note_pages),
+        "單位：新台幣元\n" + "\n".join(note_pages) + "\n" + ("單位：新台幣仟元" if pdf_amount_multiplier("\n".join(unit_pages)) == 1000 else "單位：新台幣百萬元"),
         period,
     )
 
@@ -872,7 +845,7 @@ def parse_pdf_report(content: bytes, period: str) -> dict[str, int | None]:
 def select_quarter_pdf_filename(html: str, code: str, period: str) -> str | None:
     year, quarter = split_period_for_pdf(period)
     candidates: list[tuple[int, str]] = []
-    rank = {"AI1": 0, "AIA": 1, "AE1": 2}
+    rank = {"AI1": 0}
     for match in _DOC_FILENAME_RE.finditer(html):
         if (
             match.group("year") != str(year)
@@ -881,7 +854,8 @@ def select_quarter_pdf_filename(html: str, code: str, period: str) -> str | None
         ):
             continue
         typecode = match.group("type").upper()
-        candidates.append((rank.get(typecode, 99), match.group("filename")))
+        if typecode in rank:
+            candidates.append((rank[typecode], match.group("filename")))
     if not candidates:
         return None
     candidates.sort()
@@ -1011,7 +985,7 @@ class NoteClient:
         quarter = int(quarter_text)
         last_error: Exception | None = None
 
-        for report_id in ("C", "A"):
+        for report_id in ("C",):
             params = {
                 "step": "1",
                 "CO_ID": code,
@@ -1048,7 +1022,7 @@ class NoteClient:
                     last_error = exc
 
         # Old download contract is kept only as a compatibility fallback.
-        for report_id in ("C", "A"):
+        for report_id in ("C",):
             url = DOWNLOAD_URL.format(
                 code=code,
                 year=year,
@@ -1083,14 +1057,7 @@ def parse_report(content: bytes, period: str) -> dict[str, int | None]:
     if not docs:
         raise ValueError("檔案內找不到 iXBRL 文件")
 
-    merged: dict[str, int | None] = {
-        "contractCurrent": None,
-        "contractNoncurrent": None,
-        "contractTotal": None,
-        "customerReceiptsCurrent": None,
-        "customerReceiptsNoncurrent": None,
-        "customerReceiptsTotal": None,
-    }
+    merged: dict[str, int | None] = empty_note_values()
     for doc in docs:
         parsed = parse_ixbrl_html(doc, period)
         for key, value in parsed.items():
@@ -1107,7 +1074,7 @@ def parse_report(content: bytes, period: str) -> dict[str, int | None]:
                 except ValueError:
                     visible_values = empty_note_values()
                 for key, value in visible_values.items():
-                    if merged.get(key) is None and value is not None:
+                    if key not in merged.conflicts and merged.get(key) is None and value is not None:
                         merged[key] = value
     return merged
 
@@ -1123,36 +1090,41 @@ def apply_disclosures(
     """Merge note values while distinguishing 'not disclosed' from 'not scanned yet'."""
     status = row.setdefault("status", {})
 
-    for key in ("contractCurrent", "contractNoncurrent", "contractTotal"):
+    contract_keys = ("contractCurrent", "contractNoncurrent", "contractTotal")
+    for key in contract_keys:
         note_value = parsed.get(key)
         row[f"{key}Note"] = note_value
-
-        if row.get(key) is not None:
-            row.setdefault(f"{key}Source", "balance_sheet")
+        existing_source = row.get(f"{key}Source")
+        is_main = row.get(key) is not None and existing_source in (None, "balance_sheet")
+        if is_main:
+            row[f"{key}Source"] = "balance_sheet"
         elif note_value is not None:
             row[key] = note_value
-            row[f"{key}Source"] = (
-                "pdf_notes" if source == "mops_pdf_notes" else "ixbrl_notes"
-            )
+            row[f"{key}Source"] = "notes"
             status[key] = "reported_in_notes"
+        else:
+            row.setdefault(key, None)
+            if row.get(key) is not None and existing_source in {"pdf_notes", "ixbrl_notes"}:
+                row[f"{key}Source"] = "notes"
 
+    row["data_source"] = next(
+        (row.get(f"{key}Source") for key in contract_keys if row.get(key) is not None), None)
     for key in CUSTOMER_RECEIPT_FIELDS:
         value = parsed.get(key)
         if value is not None:
             row[key] = value
+            row[f"{key}Source"] = "notes"
             status[key] = "reported_in_notes"
-        elif complete:
+        elif row.get(key) is None:
             row[key] = None
-            status[key] = "not_disclosed"
-        else:
-            # Do not turn a bounded PDF queue into a false "does not exist".
-            row.setdefault(key, None)
-            status[key] = "pending_pdf"
+            row[f"{key}Source"] = None
+            status[key] = "not_disclosed" if complete else "pending_pdf"
 
     row["notesCheckedAt"] = now_taipei().isoformat(timespec="seconds")
     row["notesReportType"] = "consolidated" if report_id == "C" else "standalone"
     row["notesSource"] = source
     row["notesChecked"] = bool(complete)
+    row["notesParserVersion"] = 2
     if complete:
         row.pop("notesStatus", None)
     else:
@@ -1232,6 +1204,8 @@ def main() -> int:
 
     latest_period = latest_completed_period(now_taipei().date())
     periods = period_candidates(args, latest_period)
+    if args.require_tsmc and "2026Q2" not in periods:
+        periods.append("2026Q2")
     docs = load_docs(codes)
     client = NoteClient()
 
@@ -1241,7 +1215,7 @@ def main() -> int:
         pmap = doc.setdefault("periods", {})
         for period in periods:
             row = pmap.setdefault(period, {})
-            if row.get("notesChecked") and not args.refresh:
+            if row.get("notesChecked") and row.get("notesParserVersion") == 2 and not args.refresh:
                 continue
             jobs.append((code, period))
 
@@ -1249,6 +1223,7 @@ def main() -> int:
     # validated before the general market queue.
     jobs.sort(
         key=lambda item: (
+            item != ("2330", "2026Q2"),
             item[0] != "2330",
             (
                 docs.get(item[0], {})
@@ -1273,8 +1248,13 @@ def main() -> int:
     for code, period in jobs:
         row = docs[code].setdefault("periods", {}).setdefault(period, {})
         try:
-            content, report_id = client.download(code, period)
-            parsed = parse_report(content, period)
+            report_id = "C"
+            try:
+                content, report_id = client.download(code, period)
+                parsed = parse_report(content, period)
+            except Exception as ix_exc:
+                row["notesIxbrlError"] = str(ix_exc)[:240]
+                parsed = empty_note_values()
             source = "mops_ixbrl"
 
             needs_pdf = (
@@ -1341,6 +1321,10 @@ def main() -> int:
         f"PDF {pdf_attempts}/{args.max_pdf if args.max_pdf > 0 else '不限'}"
     )
 
+    if args.require_tsmc:
+        from validate_operating import validate_tsmc
+        validate_tsmc(docs.get("2330", {}))
+
     save_docs(codes, meta, docs)
 
     # Rebuild latest summary from the entire universe, not only touched codes.
@@ -1350,26 +1334,6 @@ def main() -> int:
         build_latest(meta, all_docs),
         compact=True,
     )
-
-    if args.require_tsmc and "2330" in meta:
-        tsmc = load_docs(["2330"]).get("2330", {})
-        q2 = (tsmc.get("periods") or {}).get("2026Q2", {})
-        contract = q2.get("contractCurrent")
-        receipts = q2.get("customerReceiptsTotal")
-        expected_contract = 55_852_048_000
-        expected_receipts = 234_225_146_000
-
-        errors = []
-        if contract is None or abs(contract - expected_contract) > 20_000_000:
-            errors.append(
-                f"2330 2026Q2 合約負債 {contract}，預期約 {expected_contract}"
-            )
-        if receipts is None or abs(receipts - expected_receipts) > 20_000_000:
-            errors.append(
-                f"2330 2026Q2 暫收客戶款 {receipts}，預期約 {expected_receipts}"
-            )
-        if errors:
-            raise ValueError("台積電附註驗證失敗：\n" + "\n".join(errors))
 
     log(f"財報附註完成：{processed}/{len(jobs)}")
     return 0

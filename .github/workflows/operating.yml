@@ -16,6 +16,9 @@ on:
       - "scripts/build_note_disclosures.py"
       - "scripts/test_operating_leads.py"
       - "scripts/test_note_disclosures.py"
+      - "scripts/validate_operating.py"
+      - "scripts/fixtures/**"
+      - ".github/workflows/note-backfill.yml"
       - "docs/assets/app.js"
       - "docs/assets/style.css"
       - "docs/index.html"
@@ -29,6 +32,9 @@ on:
       - "scripts/build_note_disclosures.py"
       - "scripts/test_operating_leads.py"
       - "scripts/test_note_disclosures.py"
+      - "scripts/validate_operating.py"
+      - "scripts/fixtures/**"
+      - ".github/workflows/note-backfill.yml"
       - "docs/assets/app.js"
       - "docs/assets/style.css"
       - "docs/index.html"
@@ -94,7 +100,7 @@ jobs:
         working-directory: scripts
         run: |
           python build_operating_leads.py --years 1 --codes 2330
-          python build_note_disclosures.py --codes 2330 --max-requests 1 --max-pdf 1 --require-tsmc
+          python build_note_disclosures.py --codes 2330 --max-requests 1 --max-pdf 1 --refresh --require-tsmc
 
       # 開發分支只跑已知基準個股，快速驗證解析器；main 才做全市場正式資料。
       - name: 更新合約負債、存貨與營收
@@ -112,8 +118,8 @@ jobs:
             echo "手動完整回補 ${{ github.event.inputs.years || '5' }} 年"
             python build_operating_leads.py --years "${{ github.event.inputs.years || '5' }}"
 
-          elif [[ ! -f ../docs/data/operating_latest.json ]]; then
-            echo "尚無正式營運資料：第一次建立時完整回補 3 年，包含目前最新已申報季"
+          elif ! python -c 'from build_operating_leads import read_json, LATEST_OUT; stocks = (read_json(LATEST_OUT, {}) or {}).get("stocks", {}); assert stocks and sum(s.get("inventory") is not None or s.get("revenue") is not None for s in stocks.values()) >= len(stocks) * 0.9'; then
+            echo "全市場營運資料尚未完整建立：回補 3 年，避免把功能分支的兩檔基準資料當成全市場已完成"
             python build_operating_leads.py --years 3
 
           else
@@ -130,52 +136,22 @@ jobs:
 
           if [[ "${{ github.ref }}" == "refs/heads/feature/operating-leads-v2" ]]; then
             # 開發時立即驗證台積電附註，不等待全市場。
-            python build_note_disclosures.py --codes 2330 --max-requests 1 --require-tsmc
+            python build_note_disclosures.py --codes 2330 --max-requests 1 --refresh --require-tsmc
           else
             # 台積電是已知「主表不單列合約負債、附註才揭露」的基準案例。
-            # 先回補近 5 年，確保個股圖不只有最新一點。
-            python build_note_disclosures.py --codes 2330 --max-requests 1 --require-tsmc
+            # 固定驗證 2026Q2，之後的新季度由漸進佇列處理。
+            python build_note_disclosures.py --codes 2330 --max-requests 1 --refresh --require-tsmc
 
             # 其餘公司漸進補抓最新財報季；notesChecked 會避免反覆重抓。
             python build_note_disclosures.py --max-requests 120 --max-pdf 8
           fi
 
-      - name: 驗證最新資料已包含應有季度
-        if: github.event_name != 'pull_request'
+      - name: 驗證台積電附註與百德主表來源及金額
         working-directory: scripts
-        shell: bash
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          path = Path("../docs/data/operating/4563.json")
-          if not path.exists():
-              raise SystemExit("找不到 docs/data/operating/4563.json，拒絕發布")
-
-          data = json.loads(path.read_text(encoding="utf-8"))
-          periods = data.get("periods", {})
-
-          # 2026-10 時百德 2026Q2 已公開；若 Q2 沒被保存，就代表又回到
-          # 「smoke test 有抓到、正式 JSON 沒寫入」的舊問題。
-          q2 = periods.get("2026Q2", {})
-          required = ("contractCurrent", "inventory")
-          missing = [key for key in required if q2.get(key) is None]
-          if missing:
-              raise SystemExit(
-                  "4563 2026Q2 正式資料缺少：" + ", ".join(missing)
-              )
-
-          print(
-              "4563 2026Q2 已保存：",
-              "contractCurrent=", q2.get("contractCurrent"),
-              "inventory=", q2.get("inventory"),
-              "revenue=", q2.get("revenue"),
-          )
-          PY
+        run: python validate_operating.py
 
       - name: commit 營運資料
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail

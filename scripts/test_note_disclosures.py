@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import unittest
 
-from build_note_disclosures import parse_ixbrl_html, parse_pdf_note_text
+from build_note_disclosures import (
+    parse_ixbrl_html, parse_pdf_note_text, apply_disclosures,
+    empty_note_values, merge_value,
+)
+from build_operating_leads import merge_balance_sheet
+from validate_operating import validate_tsmc
 
 
 class NoteDisclosureParserTests(unittest.TestCase):
@@ -114,6 +119,67 @@ class NoteDisclosureParserTests(unittest.TestCase):
         </body></html>"""
         result = parse_ixbrl_html(html, "2026Q2")
         self.assertIsNone(result["contractCurrent"])
+
+    def test_pdf_dates_select_requested_column_and_reject_wrong_period(self):
+        text = """單位：新台幣仟元
+        114年12月31日 115年6月30日 114年6月30日
+        合約負債（帳列應付費用及其他流動負債） $ 49,954,384 $ 55,852,048 $ 56,799,375
+        """
+        self.assertEqual(parse_pdf_note_text(text, "2026Q2")["contractCurrent"], 55_852_048_000)
+        self.assertIsNone(parse_pdf_note_text(text, "2026Q1")["contractCurrent"])
+
+    def test_pdf_current_alone_is_not_assumed_total_and_dash_stays_null(self):
+        text = """單位：新台幣仟元
+        115年6月30日 114年12月31日
+        合約負債－流動 $ 0 $ 2,000
+        合約負債－非流動 $ - $ 3,000
+        """
+        parsed = parse_pdf_note_text(text, "2026Q2")
+        self.assertEqual(parsed["contractCurrent"], 0)
+        self.assertIsNone(parsed["contractNoncurrent"])
+        self.assertIsNone(parsed["contractTotal"])
+
+    def test_actual_pdf_wrapped_labels(self):
+        from pathlib import Path
+        text = Path(__file__).with_name("fixtures").joinpath("tsmc_2026q2_notes.txt").read_text()
+        parsed = parse_pdf_note_text(text, "2026Q2")
+        row = {}
+        apply_disclosures(row, parsed, "C", "mops_pdf_notes")
+        validate_tsmc({"periods": {"2026Q2": row}})
+        self.assertIsNone(parsed["contractNoncurrent"])
+        self.assertEqual(parsed["contractTotal"], 55_852_048_000)
+
+    def test_main_priority_note_refresh_and_failed_refresh_preserves_values(self):
+        row = {"contractCurrent": 145_000_000, "contractCurrentSource": "balance_sheet"}
+        apply_disclosures(row, {"contractCurrent": 999}, "C")
+        self.assertEqual(row["contractCurrent"], 145_000_000)
+        self.assertEqual(row["data_source"], "balance_sheet")
+        row = {}
+        apply_disclosures(row, {"contractCurrent": 100, "customerReceiptsTotal": 300}, "C")
+        apply_disclosures(row, {"contractCurrent": 200}, "C", complete=False)
+        self.assertEqual(row["contractCurrent"], 200)
+        self.assertEqual(row["customerReceiptsTotal"], 300)
+        self.assertEqual(row["data_source"], "notes")
+        docs = {"2330": {"periods": {"2026Q2": row}}}
+        merge_balance_sheet(docs, {"2330": {}}, "2026Q2", {"2330": {
+            "companyReturned": True, "contractCurrent": None,
+            "inventory": 500, "status": {"contractCurrent": "missing"}}})
+        self.assertEqual(row["contractCurrent"], 200)
+        self.assertEqual(row["data_source"], "notes")
+        self.assertEqual(row["status"]["contractCurrent"], "reported_in_notes")
+
+    def test_conflicts_cannot_be_revived_by_third_fact(self):
+        values = empty_note_values()
+        for amount in (100, 200, 100):
+            merge_value(values, "contractCurrent", amount)
+        self.assertIsNone(values["contractCurrent"])
+
+    def test_segment_fact_is_not_company_balance(self):
+        html = """<xbrli:context id="segment"><xbrli:entity><xbrli:segment>
+        <xbrldi:explicitMember dimension="ProductAxis">ProductA</xbrldi:explicitMember>
+        </xbrli:segment></xbrli:entity><xbrli:period><xbrli:instant>2026-06-30</xbrli:instant></xbrli:period></xbrli:context>
+        <ix:nonFraction name="x:ContractLiabilitiesCurrent" contextRef="segment" scale="3">999</ix:nonFraction>"""
+        self.assertIsNone(parse_ixbrl_html(html, "2026Q2")["contractCurrent"])
 
 
 if __name__ == "__main__":

@@ -49,6 +49,11 @@ jobs:
           # 未輪到 PDF 的公司會保留 pending_pdf，隔天自動接續，不會被誤標為沒有。
           python build_note_disclosures.py --max-requests 180 --max-pdf 18
 
+      - name: 驗證台積電與百德資料後才發布
+        if: steps.ready.outputs.ready == 'true'
+        working-directory: scripts
+        run: python validate_operating.py
+
       - name: commit 附註資料
         if: steps.ready.outputs.ready == 'true'
         shell: bash
