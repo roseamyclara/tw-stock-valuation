@@ -181,6 +181,23 @@ class NoteDisclosureParserTests(unittest.TestCase):
         <ix:nonFraction name="x:ContractLiabilitiesCurrent" contextRef="segment" scale="3">999</ix:nonFraction>"""
         self.assertIsNone(parse_ixbrl_html(html, "2026Q2")["contractCurrent"])
 
+    def test_default_queue_includes_yoy_and_qoq_periods(self):
+        from types import SimpleNamespace
+        from build_note_disclosures import period_candidates
+        self.assertEqual(period_candidates(SimpleNamespace(years=0), (2026, 2)),
+                         ["2025Q2", "2026Q1", "2026Q2"])
+        self.assertEqual(period_candidates(SimpleNamespace(years=0), (2027, 1)),
+                         ["2026Q1", "2026Q4", "2027Q1"])
+
+    def test_summary_yoy_requires_previous_year(self):
+        from build_operating_leads import build_latest
+        periods = {"2026Q2": {"contractCurrent": 55_852_048_000}}
+        meta = {"2330": {"n": "台積電"}}
+        docs = {"2330": {"periods": periods}}
+        self.assertIsNone(build_latest(meta, docs)["stocks"]["2330"]["contractCurrentChange"]["yoy"])
+        periods["2025Q2"] = {"contractCurrent": 56_799_375_000}
+        self.assertEqual(build_latest(meta, docs)["stocks"]["2330"]["contractCurrentChange"]["yoy"], -1.67)
+
 
 if __name__ == "__main__":
     unittest.main()

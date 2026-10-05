@@ -39,6 +39,8 @@ from build_operating_leads import (
     now_taipei,
     period_key,
     periods_for,
+    previous_quarter,
+    previous_year,
     read_json,
     save_docs,
     write_json,
@@ -1146,7 +1148,8 @@ def refresh_operating_latest(
 def period_candidates(args, latest_period: tuple[int, int]) -> list[str]:
     if args.years > 0:
         return periods_for(args.years, latest_period)
-    return [period_key(*latest_period)]
+    latest = period_key(*latest_period)
+    return sorted({latest, previous_quarter(latest), previous_year(latest)})
 
 
 def main() -> int:
@@ -1160,7 +1163,7 @@ def main() -> int:
         "--years",
         type=int,
         default=0,
-        help="回補附註歷史年數；0 表示只檢查最新已完成財報季",
+        help="回補附註歷史年數；0 表示檢查最新季、上季及去年同期",
     )
     parser.add_argument(
         "--max-requests",
@@ -1204,8 +1207,8 @@ def main() -> int:
 
     latest_period = latest_completed_period(now_taipei().date())
     periods = period_candidates(args, latest_period)
-    if args.require_tsmc and "2026Q2" not in periods:
-        periods.append("2026Q2")
+    if args.require_tsmc:
+        periods = sorted(set(periods) | {"2026Q2", "2025Q2"})
     docs = load_docs(codes)
     client = NoteClient()
 
@@ -1323,7 +1326,7 @@ def main() -> int:
 
     if args.require_tsmc:
         from validate_operating import validate_tsmc
-        validate_tsmc(docs.get("2330", {}))
+        validate_tsmc(docs.get("2330", {}), require_yoy=True)
 
     save_docs(codes, meta, docs)
 
