@@ -58,6 +58,31 @@ class NoteDisclosureParserTests(unittest.TestCase):
         self.assertEqual(result["customerReceiptsTotal"], 234_225_146_000)
 
 
+    def test_regex_fact_extraction_without_html_table_dependency(self):
+        # Real MOPS inline-XBRL can be malformed as HTML. Facts must still be
+        # extracted directly from ix:nonFraction + xbrli:context.
+        html = """<html><body>
+        <xbrli:context id="AsOf20260630">
+          <xbrli:period><xbrli:instant>2026-06-30</xbrli:instant></xbrli:period>
+        </xbrli:context>
+        <div>合約負債（帳列應付費用及其他流動負債）
+          <ix:nonFraction name="tifrs-notes:ContractLiabilities"
+            contextRef="AsOf20260630" scale="3">55,852,048</ix:nonFraction>
+        </div>
+        <ix:nonFraction name="tifrs-notes:TemporaryReceiptsFromCustomersCurrent"
+          contextRef="AsOf20260630" scale="3">141,853,142</ix:nonFraction>
+        <ix:nonFraction name="tifrs-notes:TemporaryReceiptsFromCustomersNoncurrent"
+          contextRef="AsOf20260630" scale="3">92,372,004</ix:nonFraction>
+        <ix:nonFraction name="tifrs-notes:TemporaryReceiptsFromCustomers"
+          contextRef="AsOf20260630" scale="3">234,225,146</ix:nonFraction>
+        </body></html>"""
+        result = parse_ixbrl_html(html, "2026Q2")
+        self.assertEqual(result["contractCurrent"], 55_852_048_000)
+        self.assertEqual(result["customerReceiptsCurrent"], 141_853_142_000)
+        self.assertEqual(result["customerReceiptsNoncurrent"], 92_372_004_000)
+        self.assertEqual(result["customerReceiptsTotal"], 234_225_146_000)
+
+
     def test_tsmc_style_pdf_note_text(self):
         text = """
         單位：新台幣仟元
