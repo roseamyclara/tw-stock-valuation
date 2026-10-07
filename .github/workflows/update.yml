@@ -58,6 +58,11 @@ jobs:
         working-directory: scripts
         run: python build_performance.py
 
+      - name: 內部人買賣資料
+        working-directory: scripts
+        run: python build_insider_flows.py
+        continue-on-error: true
+
       - name: commit 資料
         run: |
           git config user.name  "github-actions[bot]"
