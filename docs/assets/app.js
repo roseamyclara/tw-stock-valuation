@@ -34,7 +34,7 @@
   const state = {
     rows: [], view: [], meta: null, market: null, tags: {}, movers: null, history: null,
     tdcc: { date: null, base: null, d: {} },
-    performance: { stocks: {} }, returnPeriod: "d1", revenueNotes: {}, profitGrowth: {stocks:{}}, operating: {stocks:{}}, selectedColumns: ["p", "cap", "priceReturn", "pe", "ps", "rev_yoy", "rev_cum", "contract_yoy", "customer_receipts_yoy", "inventory_yoy", "qrev_yoy", "net_yoy", "rev_note"],
+    performance: { stocks: {} }, returnPeriod: "d1", revenueNotes: {}, profitGrowth: {stocks:{}}, operating: {stocks:{}}, insider: {stocks:{}}, insiderPeriod: "d1", selectedColumns: ["p", "cap", "priceReturn", "pe", "ps", "rev_yoy", "rev_cum", "contract_yoy", "customer_receipts_yoy", "net_yoy", "rev_note"],
     // sorts: [{k, dir}]，最多 3 個，陣列順序就是優先序（索引 0 最優先）
     // 空陣列代表沒設任何條件，套用 DEFAULT_SORTS
     sorts: [], filterMarket: "", industry: "", tag: "", q: "",
@@ -44,11 +44,16 @@
   const tagsOf = (code) => state.tags[code] || [];
 
   const RETURN_PERIODS = { d1: "一日", y5: "五年", y1: "一年", ytd: "今年迄今", m3: "三個月", m1: "一個月", w1: "一週" };
+  const INSIDER_PERIODS = { d1: "1日", d5: "5天", d10: "10天", d30: "30天" };
   const performanceOf = (code) => state.performance.stocks[code] || {};
   const operatingOf = (code) => state.operating.stocks[code] || {};
+  const insiderOf = (code) => state.insider.stocks[code] || {};
   const returnOf = (code) => (performanceOf(code).returns || {})[state.returnPeriod] ?? null;
+  const insiderValue = (code) => (insiderOf(code).summary || {})[state.insiderPeriod] ?? null;
   const periodOptions = () => Object.entries(RETURN_PERIODS).map(([k, t]) =>
     `<option value="${k}"${state.returnPeriod === k ? " selected" : ""}>${t}</option>`).join("");
+  const insiderPeriodOptions = () => Object.entries(INSIDER_PERIODS).map(([k, t]) =>
+    `<option value="${k}"${state.insiderPeriod === k ? " selected" : ""}>${t}</option>`).join("");
   function changeReturnPeriod(value) {
     if (!Object.hasOwn(RETURN_PERIODS, value)) return;
     state.returnPeriod = value;
@@ -57,6 +62,14 @@
     paintHead();
     const mobile = $("returnPeriodMobile");
     if (mobile) mobile.value = value;
+  }
+
+  function changeInsiderPeriod(value) {
+    if (!Object.hasOwn(INSIDER_PERIODS, value)) return;
+    state.insiderPeriod = value;
+    state.shown = 200;
+    applyFilters();
+    paintHead();
   }
 
   // 集保「400 張以上」大股東：[占集保庫存比例%, 與四週前的差(百分點)]
@@ -405,6 +418,7 @@
     },
     { k: "p", t: "股價", get: (r) => cell(r.p) },
     { k: "priceReturn", t: "漲跌幅%", get: (r) => cell(returnOf(r.c), 2, true), val: (r) => returnOf(r.c) },
+    { k: "insider", t: "內部人", sel: "內部人買賣（可選期間）", get: (r) => cell(insiderValue(r.c), 2, true), val: (r) => insiderValue(r.c) },
     { k: "fromLow52", t: "距52週低點%", get: (r) => cell(performanceOf(r.c).fromLow52, 2, true), val: (r) => performanceOf(r.c).fromLow52 },
     { k: "fromHigh52", t: "距52週高點%", get: (r) => cell(performanceOf(r.c).fromHigh52, 2, true), val: (r) => performanceOf(r.c).fromHigh52 },
     { k: "cap", t: "市值", get: (r) => human(r.cap) ?? '<span class="na">—</span>' },
@@ -436,7 +450,7 @@
 
   const FIXED_COLUMNS = ["c", "n", "i"];
   const visibleCols = () => [...FIXED_COLUMNS, ...state.selectedColumns].map(k => COLS.find(c => c.k === k));
-  const columnLabel = c => c.k === "priceReturn" ? "漲跌幅（可選期間）" : (c.sel || c.t);
+  const columnLabel = c => c.k === "priceReturn" ? "漲跌幅（可選期間）" : c.k === "insider" ? "內部人買賣（可選期間）" : (c.sel || c.t);
   let draggedColumn = null;
 
   function changeColumn(key, before = null, remove = false) {
@@ -507,7 +521,7 @@
   }
 
   // 手機排序選單只放有意義的數值欄位
-  const SORTABLE = ["priceReturn", "fromLow52", "fromHigh52", "cap", "p", "pe", "ps", "pb", "dy", "rev_yoy", "rev_cum",
+  const SORTABLE = ["priceReturn", "insider", "fromLow52", "fromHigh52", "cap", "p", "pe", "ps", "pb", "dy", "rev_yoy", "rev_cum",
                     "contract", "contract_qoq", "contract_yoy",
                     "customer_receipts", "customer_receipts_qoq", "customer_receipts_yoy",
                     "inventory", "inventory_qoq", "inventory_yoy",
@@ -542,6 +556,9 @@
     if (c.k === "priceReturn") return `<th draggable="${!FIXED_COLUMNS.includes(c.k)}" data-letter="${String.fromCharCode(65 + columnIndex)}" data-k="${c.k}" aria-sort="${aria}" title="${HEAD_HINT}">
       <button type="button" class="return-sort" aria-label="排序漲跌幅">${c.t}${ind}</button>
       <select class="return-period" aria-label="選擇漲跌幅期間">${periodOptions()}</select></th>`;
+    if (c.k === "insider") return `<th draggable="${!FIXED_COLUMNS.includes(c.k)}" data-letter="${String.fromCharCode(65 + columnIndex)}" data-k="${c.k}" aria-sort="${aria}" title="內部人買進為正、賣出為負；單位：張。${HEAD_HINT}">
+      <button type="button" class="insider-sort" aria-label="排序內部人買賣">${c.t}${ind}</button>
+      <select class="insider-period" aria-label="選擇內部人買賣期間">${insiderPeriodOptions()}</select></th>`;
     return `<th draggable="${!FIXED_COLUMNS.includes(c.k)}" data-letter="${String.fromCharCode(65 + columnIndex)}" data-k="${c.k}" aria-sort="${aria}" title="${tip}">${c.t}${ind}</th>`;
   }
 
@@ -550,6 +567,7 @@
     const thead = $("thead");
     thead.innerHTML = visibleCols().map(thHtml).join("");
     bindReturnPeriod();
+    bindInsiderPeriod();
     thead.querySelectorAll("th").forEach(th => {
       th.addEventListener("click", e => {
         if (th.dataset.k !== "rev_note" && !e.target.closest("select")) sortBy(th.dataset.k);
@@ -566,7 +584,15 @@
     const select = $("thead").querySelector(".return-period");
     if (select) select.addEventListener("change", (e) => {
       changeReturnPeriod(e.target.value);
-      $("thead").querySelector(".return-period").focus();
+      $("thead").querySelector(".return-period")?.focus();
+    });
+  }
+
+  function bindInsiderPeriod() {
+    const select = $("thead").querySelector(".insider-period");
+    if (select) select.addEventListener("change", (e) => {
+      changeInsiderPeriod(e.target.value);
+      $("thead").querySelector(".insider-period")?.focus();
     });
   }
 
@@ -735,7 +761,7 @@
       ? ts.slice(0, 4).map((t) => `<button type="button" class="tag${state.tag === t ? " is-active" : ""}" data-tag="${esc(t)}">${esc(t)}</button>`).join("")
       : (r.i ? `<button type="button" class="tag ind-tag${state.industry === r.i ? " is-active" : ""}" data-ind="${esc(r.i)}">${esc(r.i)}</button>` : "");
     const metrics = visibleCols().filter(c => !["c", "n", "i", "p", "cap"].includes(c.k))
-      .map(c => [c.k === "priceReturn" ? RETURN_PERIODS[state.returnPeriod] + "漲跌幅%" : (c.sel || c.t), c.get(r)]);
+      .map(c => [c.k === "priceReturn" ? RETURN_PERIODS[state.returnPeriod] + "漲跌幅%" : c.k === "insider" ? `內部人${INSIDER_PERIODS[state.insiderPeriod]}` : (c.sel || c.t), c.get(r)]);
     return `<div class="scard" data-c="${r.c}" role="button" tabindex="0">
       <div class="scard-top">
         <div class="scard-id">
@@ -1120,7 +1146,7 @@
 
   // ---------------------------------------------------------------- 啟動
   (async function init() {
-    const [meta, market, rows, tags, movers, history, tdcc, performance, revenueNotes, profitGrowth, operating] = await Promise.all([
+    const [meta, market, rows, tags, movers, history, tdcc, performance, revenueNotes, profitGrowth, operating, insider] = await Promise.all([
       getJSON("data/meta.json", null),
       getJSON("data/market.json", null),
       getJSON("data/latest.json", []),
@@ -1132,11 +1158,13 @@
       getJSON("data/revenue_notes.json", {}),
       getJSON("data/profit_growth.json", {stocks:{}}),
       getJSON("data/operating_latest.json", {stocks:{}}),
+      getJSON("data/insider_flows.json", {stocks:{}}),
     ]);
     state.meta = meta; state.market = market;
     state.revenueNotes = revenueNotes || {};
     state.profitGrowth = profitGrowth || {stocks:{}};
     state.operating = operating || {stocks:{}};
+    state.insider = insider || {stocks:{}};
     state.rows = rows || []; state.tags = tags || {}; state.movers = movers;
     state.history = history;
     if (performance && performance.stocks) state.performance = performance;
