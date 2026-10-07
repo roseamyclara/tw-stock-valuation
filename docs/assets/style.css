@@ -1288,8 +1288,8 @@ footer a:hover { color: var(--accent); border-bottom-color: var(--accent); }
 }
 
 /* 個股價格表現：下拉選單切換期間，排序按鈕與選單各自操作。 */
-.return-sort { color: inherit; font: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
-.return-period { display: block; margin-top: 6px; font: inherit; color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; }
+.return-sort, .insider-sort { color: inherit; font: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+.return-period, .insider-period { display: block; margin-top: 6px; font: inherit; color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; }
 .return-mobile { display: none; }
 @media (max-width: 860px) { .return-mobile { display: flex; align-items: center; gap: 8px; } }
 
@@ -1550,3 +1550,7 @@ th[data-k="rev_note"] { cursor: grab; }
 
 
 .profit-period { display:block; font-size:10px; font-weight:400; color:var(--muted, #777); white-space:nowrap; }
+
+/* 內部人買賣欄位：台股慣例，買進正值紅、賣出負值綠。 */
+.insider-flow.pos { color: #ef4444; font-weight: 700; }
+.insider-flow.neg { color: #16a34a; font-weight: 700; }

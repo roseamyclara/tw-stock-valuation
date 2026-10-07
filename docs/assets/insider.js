@@ -265,8 +265,7 @@
     syncing = true;
     try {
       ensureStyle();
-      augmentTable();
-      augmentCards();
+      // 表格與手機欄位由 app.js 原生欄位系統處理；此檔只負責個股歷史圖。
       document.querySelectorAll(".overlay .panel").forEach(augmentPanel);
     } finally {
       syncing = false;
