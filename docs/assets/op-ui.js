@@ -1,4 +1,4 @@
-/* 營運先行指標面板 UI 增強：移除客戶暫收款、取消存貨周轉天數、比較圖勾選、模式控制移到單項圖上方 */
+/* 營運先行指標面板 UI 增強：移除客戶暫收款、取消存貨周轉天數、比較圖勾選、修正單項圖下拉切換 */
 (() => {
   "use strict";
 
@@ -6,6 +6,11 @@
     { field: "contractObserved", key: "contract", name: "合約負債", color: "var(--accent)" },
     { field: "inventory", key: "inventory", name: "存貨", color: "var(--series-2)" },
     { field: "revenue", key: "revenue", name: "營收", color: "var(--series-3)" },
+  ];
+  const SELECTED_METRICS = [
+    { field: "contractObserved", label: "合約負債" },
+    { field: "inventory", label: "存貨" },
+    { field: "revenue", label: "季營收" },
   ];
   const MOBILE = window.matchMedia("(max-width: 860px)");
   const CUSTOMER_LABEL = "客戶暫收款";
@@ -49,14 +54,15 @@
     labels.sort();
     const vals = series.flatMap((s) => s.points.map(([, v]) => v)).filter((v) => v != null);
     if (!series.length || !labels.length || !vals.length) {
-      svg.innerHTML = `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" class="tick">請勾選至少一項指標</text>`;
+      svg.innerHTML = `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" class="tick">${opts.emptyText || "尚無資料"}</text>`;
       return;
     }
 
     let lo = Math.min(...vals), hi = Math.max(...vals);
     const pad = (hi - lo) * 0.12 || Math.abs(hi) * 0.12 || 1;
-    lo = Math.max(0, lo - pad);
+    lo = opts.allowNegative ? lo - pad : Math.max(0, lo - pad);
     hi += pad;
+    if (hi === lo) hi += 1;
 
     const X = (i) => M.l + (labels.length === 1 ? 0 : (i * (W - M.l - M.r)) / (labels.length - 1));
     const Y = (v) => H - M.b - ((v - lo) / (hi - lo)) * (H - M.t - M.b);
@@ -140,7 +146,7 @@
         const p = s.points.find((q) => q[0] === labels[idx]);
         if (!p || p[1] == null) return;
         dots.appendChild(mk("circle", { class: "pt", cx: x, cy: Y(p[1]), r: 4.5, fill: s.color }));
-        rows.push(`<div class="tt-r"><span><span class="swatch" style="display:inline-block;background:${s.color}"></span> ${s.name}</span><span>${fmt(p[1])}</span></div>`);
+        rows.push(`<div class="tt-r"><span><span class="swatch" style="display:inline-block;background:${s.color}"></span> ${s.name}</span><span>${fmt(p[1])}${opts.unit || ""}</span></div>`);
       });
       if (!rows.length) return hide();
       tipEl.innerHTML = `<div class="tt-h">${labels[idx]}</div>${rows.join("")}`;
@@ -177,14 +183,56 @@
       });
   }
 
+  const prevQuarter = (period) => {
+    const m = /^(\d{4})Q([1-4])$/.exec(period || "");
+    if (!m) return null;
+    let y = Number(m[1]), q = Number(m[2]) - 1;
+    if (!q) { y -= 1; q = 4; }
+    return `${y}Q${q}`;
+  };
+  const prevYear = (period) => {
+    const m = /^(\d{4})Q([1-4])$/.exec(period || "");
+    return m ? `${Number(m[1]) - 1}Q${m[2]}` : null;
+  };
+  const opDelta = (periods, period, field, kind) => {
+    const cur = periods[period] && periods[period][field];
+    const prior = kind === "qoq" ? prevQuarter(period) : prevYear(period);
+    const old = prior && periods[prior] && periods[prior][field];
+    if (cur == null || old == null || old === 0) return null;
+    return (cur - old) / Math.abs(old) * 100;
+  };
+  const opSeries = (periods, labels, field, mode) => labels.map((period) => {
+    const raw = periods[period] && periods[period][field];
+    if (mode === "amount") return [period, raw == null ? null : raw / 1e8];
+    return [period, opDelta(periods, period, field, mode)];
+  });
+
+  function metricFromSelect(select) {
+    return SELECTED_METRICS.find((metric) => metric.field === select?.value) || SELECTED_METRICS[0];
+  }
+
+  function normalizeMetricSelect(panel) {
+    const select = panel.querySelector("#opMetric");
+    if (!select) return null;
+    const current = SELECTED_METRICS.some((metric) => metric.field === select.value)
+      ? select.value : SELECTED_METRICS[0].field;
+    select.innerHTML = SELECTED_METRICS
+      .map((metric, index) => `<option value="${metric.field}">${index + 1}) ${metric.label}</option>`)
+      .join("");
+    select.value = current;
+    return select;
+  }
+
   function cleanCustomerAndTurnover(panel) {
-    panel.querySelectorAll("#opMetric option").forEach((option) => {
-      if (HIDDEN_KEYS.has(option.value) || option.textContent.includes(CUSTOMER_LABEL) || option.textContent.includes(TURNOVER_LABEL)) option.remove();
-    });
+    normalizeMetricSelect(panel);
     panel.querySelectorAll(".op-summary .op-kpi, .scard-metrics .m").forEach((el) => {
       if (el.textContent.includes(CUSTOMER_LABEL) || el.textContent.includes(TURNOVER_LABEL)) el.remove();
     });
     panel.querySelectorAll("#opCombinedNote, .op-turnover-note").forEach((el) => el.remove());
+    panel.querySelectorAll("p.note").forEach((el) => {
+      if (!el.textContent.includes(CUSTOMER_LABEL)) return;
+      el.textContent = "合約負債先讀資產負債表主表；主表未單獨列示時，再讀官方 iXBRL／PDF 財報附註。合約負債使用已揭露總額，未揭露總額時使用流動部分。缺值維持空白，不以 0 代替。";
+    });
   }
 
   async function enhanceCompareChart(panel) {
@@ -225,11 +273,63 @@
       const series = SERIES
         .filter((s) => checked.includes(s.field))
         .map((s) => ({ ...s, points: normalized(periods, labels, s.field) }));
-      lineChart(svg, tip, series, { height: MOBILE.matches ? 220 : 250 });
+      lineChart(svg, tip, series, { height: MOBILE.matches ? 220 : 250, emptyText: "請勾選至少一項指標" });
     };
     options.addEventListener("change", redraw);
     MOBILE.addEventListener("change", redraw);
     redraw();
+  }
+
+  async function enhanceSelectedMetricChart(panel) {
+    if (panel.dataset.selectedMetricEnhanced === "1") return;
+    const select = normalizeMetricSelect(panel);
+    const svg = panel.querySelector("#opSelectedChart");
+    const tip = panel.querySelector("#opSelectedTip");
+    if (!select || !svg) return;
+    panel.dataset.selectedMetricEnhanced = "1";
+
+    const code = panel.querySelector(".panel-head h3")?.textContent.trim().match(/^\d+/)?.[0];
+    if (!code) return;
+    const data = await fetch(`data/operating/${code}.json`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : null).catch(() => null);
+    const periods = data?.periods || {};
+    preparePeriods(periods);
+    const labels = Object.keys(periods).sort();
+
+    const render = () => {
+      normalizeMetricSelect(panel);
+      const metric = metricFromSelect(select);
+      const mode = panel.querySelector("[data-op-mode][aria-pressed='true']")?.dataset.opMode || "amount";
+      const title = panel.querySelector("#opSelectedTitle");
+      const unit = panel.querySelector("#opSelectedUnit");
+      if (title) title.textContent = metric.label;
+      if (unit) unit.textContent = mode === "amount" ? "億元" : "%";
+
+      const sourceNote = panel.querySelector("#opSourceNote");
+      if (sourceNote) {
+        if (metric.field === "contractObserved") {
+          sourceNote.textContent = labels.map((period) => {
+            const row = periods[period];
+            if (!row || row.contractObserved == null) return null;
+            const source = row.contractTotal != null ? row.contractTotalSource : row.contractCurrentSource;
+            if (!source) return null;
+            const basis = row.contractTotal != null ? "總額" : "流動部分";
+            return `${period}：${source === "balance_sheet" ? "主表" : "附註"}（${basis}）`;
+          }).filter(Boolean).join("；");
+        } else {
+          sourceNote.textContent = "";
+        }
+      }
+
+      lineChart(svg, tip,
+        [{ key: metric.field, name: metric.label, color: "var(--accent)", points: opSeries(periods, labels, metric.field, mode) }],
+        { unit: mode === "amount" ? "億元" : "%", allowNegative: mode !== "amount", height: MOBILE.matches ? 220 : 250 }
+      );
+    };
+
+    select.addEventListener("change", render);
+    panel.querySelectorAll("[data-op-mode]").forEach((button) => button.addEventListener("click", () => setTimeout(render, 0)));
+    MOBILE.addEventListener("change", render);
+    render();
   }
 
   function moveModeControls(panel) {
@@ -250,6 +350,7 @@
     cleanCustomerAndTurnover(panel);
     moveModeControls(panel);
     enhanceCompareChart(panel);
+    enhanceSelectedMetricChart(panel);
   }
 
   const observer = new MutationObserver(() => {
