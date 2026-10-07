@@ -49,7 +49,9 @@
   const operatingOf = (code) => state.operating.stocks[code] || {};
   const insiderOf = (code) => state.insider.stocks[code] || {};
   const returnOf = (code) => (performanceOf(code).returns || {})[state.returnPeriod] ?? null;
-  const insiderValue = (code) => (insiderOf(code).summary || {})[state.insiderPeriod] ?? null;
+  const insiderTransferValue = (code) => (insiderOf(code).transfer?.summary || {})[state.insiderPeriod] ?? null;
+  const insiderHoldingChange = (code) => insiderOf(code).holding?.monthlyChange ?? null;
+  const insiderHoldingMonth = (code) => insiderOf(code).holding?.latestMonth || "";
   const periodOptions = () => Object.entries(RETURN_PERIODS).map(([k, t]) =>
     `<option value="${k}"${state.returnPeriod === k ? " selected" : ""}>${t}</option>`).join("");
   const insiderPeriodOptions = () => Object.entries(INSIDER_PERIODS).map(([k, t]) =>
@@ -98,6 +100,16 @@
     if (!signed) return s;
     const cls = v > 0 ? "pos" : v < 0 ? "neg" : "";
     return `<span class="${cls}">${v > 0 ? "+" : ""}${s}</span>`;
+  };
+
+  const insiderTransferCell = (code) => {
+    const v = insiderTransferValue(code);
+    return v == null ? cell(null) : cell(-Math.abs(v), 2, true);
+  };
+  const insiderHoldingCell = (code) => {
+    const v = insiderHoldingChange(code), month = insiderHoldingMonth(code);
+    if (v == null) return `<span class="na" title="${month ? `${month} 尚無前一期快照可比較` : "尚無持股月報"}">—</span>`;
+    return `<span title="${month ? `${month} 持股餘額較前一月變化` : "持股月增減"}">${cell(v, 2, true)}</span>`;
   };
 
   async function getJSON(path, fallback) {
@@ -418,7 +430,8 @@
     },
     { k: "p", t: "股價", get: (r) => cell(r.p) },
     { k: "priceReturn", t: "漲跌幅%", get: (r) => cell(returnOf(r.c), 2, true), val: (r) => returnOf(r.c) },
-    { k: "insider", t: "內部人", sel: "內部人買賣（可選期間）", get: (r) => cell(insiderValue(r.c), 2, true), val: (r) => insiderValue(r.c) },
+    { k: "insider_transfer", t: "內部人轉讓申報", sel: "內部人轉讓申報（可選期間）", get: (r) => insiderTransferCell(r.c), val: (r) => insiderTransferValue(r.c) },
+    { k: "insider_holding", t: "內部人持股月增減", get: (r) => insiderHoldingCell(r.c), val: (r) => insiderHoldingChange(r.c) },
     { k: "fromLow52", t: "距52週低點%", get: (r) => cell(performanceOf(r.c).fromLow52, 2, true), val: (r) => performanceOf(r.c).fromLow52 },
     { k: "fromHigh52", t: "距52週高點%", get: (r) => cell(performanceOf(r.c).fromHigh52, 2, true), val: (r) => performanceOf(r.c).fromHigh52 },
     { k: "cap", t: "市值", get: (r) => human(r.cap) ?? '<span class="na">—</span>' },
@@ -450,7 +463,7 @@
 
   const FIXED_COLUMNS = ["c", "n", "i"];
   const visibleCols = () => [...FIXED_COLUMNS, ...state.selectedColumns].map(k => COLS.find(c => c.k === k));
-  const columnLabel = c => c.k === "priceReturn" ? "漲跌幅（可選期間）" : c.k === "insider" ? "內部人買賣（可選期間）" : (c.sel || c.t);
+  const columnLabel = c => c.k === "priceReturn" ? "漲跌幅（可選期間）" : c.k === "insider_transfer" ? "內部人轉讓申報（可選期間）" : (c.sel || c.t);
   let draggedColumn = null;
 
   function changeColumn(key, before = null, remove = false) {
@@ -521,7 +534,7 @@
   }
 
   // 手機排序選單只放有意義的數值欄位
-  const SORTABLE = ["priceReturn", "insider", "fromLow52", "fromHigh52", "cap", "p", "pe", "ps", "pb", "dy", "rev_yoy", "rev_cum",
+  const SORTABLE = ["priceReturn", "insider_transfer", "insider_holding", "fromLow52", "fromHigh52", "cap", "p", "pe", "ps", "pb", "dy", "rev_yoy", "rev_cum",
                     "contract", "contract_qoq", "contract_yoy",
                     "customer_receipts", "customer_receipts_qoq", "customer_receipts_yoy",
                     "inventory", "inventory_qoq", "inventory_yoy",
@@ -556,9 +569,9 @@
     if (c.k === "priceReturn") return `<th draggable="${!FIXED_COLUMNS.includes(c.k)}" data-letter="${String.fromCharCode(65 + columnIndex)}" data-k="${c.k}" aria-sort="${aria}" title="${HEAD_HINT}">
       <button type="button" class="return-sort" aria-label="排序漲跌幅">${c.t}${ind}</button>
       <select class="return-period" aria-label="選擇漲跌幅期間">${periodOptions()}</select></th>`;
-    if (c.k === "insider") return `<th draggable="${!FIXED_COLUMNS.includes(c.k)}" data-letter="${String.fromCharCode(65 + columnIndex)}" data-k="${c.k}" aria-sort="${aria}" title="內部人買進為正、賣出為負；單位：張。${HEAD_HINT}">
-      <button type="button" class="insider-sort" aria-label="排序內部人買賣">${c.t}${ind}</button>
-      <select class="insider-period" aria-label="選擇內部人買賣期間">${insiderPeriodOptions()}</select></th>`;
+    if (c.k === "insider_transfer") return `<th draggable="${!FIXED_COLUMNS.includes(c.k)}" data-letter="${String.fromCharCode(65 + columnIndex)}" data-k="${c.k}" aria-sort="${aria}" title="事前申報轉讓股數，不代表已成交；單位：張。${HEAD_HINT}">
+      <button type="button" class="insider-sort" aria-label="排序內部人轉讓申報">${c.t}${ind}</button>
+      <select class="insider-period" aria-label="選擇內部人轉讓申報期間">${insiderPeriodOptions()}</select></th>`;
     return `<th draggable="${!FIXED_COLUMNS.includes(c.k)}" data-letter="${String.fromCharCode(65 + columnIndex)}" data-k="${c.k}" aria-sort="${aria}" title="${tip}">${c.t}${ind}</th>`;
   }
 
@@ -761,7 +774,7 @@
       ? ts.slice(0, 4).map((t) => `<button type="button" class="tag${state.tag === t ? " is-active" : ""}" data-tag="${esc(t)}">${esc(t)}</button>`).join("")
       : (r.i ? `<button type="button" class="tag ind-tag${state.industry === r.i ? " is-active" : ""}" data-ind="${esc(r.i)}">${esc(r.i)}</button>` : "");
     const metrics = visibleCols().filter(c => !["c", "n", "i", "p", "cap"].includes(c.k))
-      .map(c => [c.k === "priceReturn" ? RETURN_PERIODS[state.returnPeriod] + "漲跌幅%" : c.k === "insider" ? `內部人${INSIDER_PERIODS[state.insiderPeriod]}` : (c.sel || c.t), c.get(r)]);
+      .map(c => [c.k === "priceReturn" ? RETURN_PERIODS[state.returnPeriod] + "漲跌幅%" : c.k === "insider_transfer" ? `內部人轉讓申報${INSIDER_PERIODS[state.insiderPeriod]}` : (c.sel || c.t), c.get(r)]);
     return `<div class="scard" data-c="${r.c}" role="button" tabindex="0">
       <div class="scard-top">
         <div class="scard-id">
