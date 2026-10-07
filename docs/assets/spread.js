@@ -10,28 +10,32 @@ const fmtPct=v=>v==null?'—':(v>0?'+':'')+v.toFixed(1)+'%';
 const fmtRel=v=>v==null?'—':v.toFixed(2);
 const cls=v=>v==null?'':v<-.05?'spread-neg':v>.05?'spread-pos':'spread-zero';
 const finVal=(r,k)=>r&&r.fin&&Number.isFinite(r.fin[k])?r.fin[k]:null;
-const twGrowth=r=>finVal(r,'rev_yoy') ?? (r.rev&&Number.isFinite(r.rev.yoy)?r.rev.yoy:null) ?? (r.rev&&Number.isFinite(r.rev.cum_yoy)?r.rev.cum_yoy:null);
+const twGrowth=r=>finVal(r,'rev_yoy') ?? (r.rev&&Number.isFinite(r.rev.cum_yoy)?r.rev.cum_yoy:null) ?? (r.rev&&Number.isFinite(r.rev.yoy)?r.rev.yoy:null);
 const usGrowth=r=>finVal(r,'rev_yoy');
 const ADR_EXCLUDE=new Set(['TSM','UMC','ASX','AUO','HIMX']);
 
 function classifyTw(r,tags){
-  const s=[r.i||'',...(tags[r.c]||[])].join('|').toLowerCase(), out=[];
-  const add=x=>{if(!out.includes(x))out.push(x)};
-  if(/壽險|保險/.test(s)) add('保險');
-  if(/銀行|金控|信用卡|證券|金融/.test(s)) add('區域銀行');
-  if(/晶圓|半導體|ic設計|asic|dram|flash|記憶體|封裝|探針|晶片|矽智財|矽晶圓|載板|砷化鎵/.test(s)) add('半導體');
-  if(/ai伺服器|資料中心|雲端伺服器|白牌伺服器|伺服器管理/.test(s)){add('資料中心');add('人工智慧')}
-  if(/工業自動化|氣動元件|自動化/.test(s)) add('工業自動化');
-  if(/新藥|血癌|干擾素|生技/.test(s)) add('生技新藥');
-  if(/醫療器材|精準醫療/.test(s)) add('醫療器材');
-  if(/航空客運|航空貨運/.test(s)) add('航空');
-  if(/遊戲|電競/.test(s)) add('遊戲電競');
-  if(/零售|超商/.test(s)) add('零售');
-  if(/太陽能/.test(s)) add('太陽能');
-  if(/電動車/.test(s)) add('電動車');
-  if(/資安/.test(s)) add('資安');
-  if(/雲端/.test(s)) add('雲端運算');
-  return out;
+  const ts=tags[r.c]||[];
+  const s=[r.i||'',...ts].join('|').toLowerCase();
+
+  // 第一版只對「可比性夠高」的產業出數字；其餘寧可留白，不硬湊。
+  if(r.i==='金融保險業'){
+    const out=[];
+    if(/壽險|保險/.test(s)) out.push('保險');
+    if(/銀行|金控|信用卡|證券|金融/.test(s)) out.push('區域銀行');
+    return out.length?out:['區域銀行'];
+  }
+  if(r.i==='半導體業') return ['半導體'];
+  if(/半導體設備|半導體測試|測試分選機|探針卡|測試座|測試介面/.test(s)) return ['半導體'];
+  if(r.i==='生技醫療業'){
+    if(/新藥|血癌|干擾素|藥/.test(s)) return ['生技新藥'];
+    if(/醫療器材|精準醫療/.test(s)) return ['醫療器材'];
+  }
+  if(/航空客運|航空貨運/.test(s)) return ['航空'];
+  if(r.i==='文化創意業'&&/線上遊戲|手機遊戲|遊戲機台/.test(s)) return ['遊戲電競'];
+  if((r.i==='貿易百貨'||r.i==='食品工業')&&/超商通路|零售/.test(s)) return ['零售'];
+
+  return [];
 }
 function validMetric(k,v){
   if(!Number.isFinite(v)||v<=0)return false;
