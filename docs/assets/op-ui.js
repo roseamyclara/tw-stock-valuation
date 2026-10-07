@@ -1,4 +1,4 @@
-/* 營運先行指標面板 UI 增強：移除客戶暫收款、加入存貨周轉天數、比較圖勾選、模式控制移到單項圖上方 */
+/* 營運先行指標面板 UI 增強：移除客戶暫收款、取消存貨周轉天數、比較圖勾選、模式控制移到單項圖上方 */
 (() => {
   "use strict";
 
@@ -6,13 +6,14 @@
     { field: "contractObserved", key: "contract", name: "合約負債", color: "var(--accent)" },
     { field: "inventory", key: "inventory", name: "存貨", color: "var(--series-2)" },
     { field: "revenue", key: "revenue", name: "營收", color: "var(--series-3)" },
-    { field: "inventoryTurnoverDays", key: "inventoryTurnoverDays", name: "存貨周轉天數", color: "var(--series-1)" },
   ];
   const MOBILE = window.matchMedia("(max-width: 860px)");
   const CUSTOMER_LABEL = "客戶暫收款";
-  const CUSTOMER_KEYS = new Set(["customer_receipts", "customer_receipts_qoq", "customer_receipts_yoy"]);
-  const TURNOVER_FIELD = "inventoryTurnoverDays";
-  const QUARTER_DAYS = 91.25;
+  const TURNOVER_LABEL = "存貨周轉天數";
+  const HIDDEN_KEYS = new Set([
+    "customer_receipts", "customer_receipts_qoq", "customer_receipts_yoy",
+    "customerReceiptsTotal", "contractAndReceipts", "inventoryTurnoverDays",
+  ]);
 
   const fmt = (v, d = 2) =>
     v === null || v === undefined || Number.isNaN(v) ? null : Number(v).toFixed(d);
@@ -27,22 +28,12 @@
       .op-compare-options label { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); cursor: pointer; user-select: none; }
       .op-compare-options input { width: 14px; height: 14px; accent-color: var(--accent); }
       .op-mode-above-selected { margin-top: 14px; margin-bottom: 8px; }
-      .op-turnover-note { margin-top: 6px; }
       @media (max-width: 640px) {
         .op-compare-head { display: block; }
         .op-compare-options { justify-content: flex-start; margin-top: 8px; }
       }
     `;
     document.head.appendChild(style);
-  }
-
-  function human(n) {
-    if (n == null || Number.isNaN(n)) return "—";
-    const a = Math.abs(n);
-    if (a >= 1e12) return (n / 1e12).toFixed(2) + " 兆";
-    if (a >= 1e8) return (n / 1e8).toFixed(1) + " 億";
-    if (a >= 1e4) return (n / 1e4).toFixed(0) + " 萬";
-    return String(Math.round(n));
   }
 
   function lineChart(svg, tipEl, series, opts = {}) {
@@ -64,7 +55,7 @@
 
     let lo = Math.min(...vals), hi = Math.max(...vals);
     const pad = (hi - lo) * 0.12 || Math.abs(hi) * 0.12 || 1;
-    lo = opts.allowNegative ? lo - pad : Math.max(0, lo - pad);
+    lo = Math.max(0, lo - pad);
     hi += pad;
 
     const X = (i) => M.l + (labels.length === 1 ? 0 : (i * (W - M.l - M.r)) / (labels.length - 1));
@@ -149,7 +140,7 @@
         const p = s.points.find((q) => q[0] === labels[idx]);
         if (!p || p[1] == null) return;
         dots.appendChild(mk("circle", { class: "pt", cx: x, cy: Y(p[1]), r: 4.5, fill: s.color }));
-        rows.push(`<div class="tt-r"><span><span class="swatch" style="display:inline-block;background:${s.color}"></span> ${s.name}</span><span>${fmt(p[1])}${opts.unit || ""}</span></div>`);
+        rows.push(`<div class="tt-r"><span><span class="swatch" style="display:inline-block;background:${s.color}"></span> ${s.name}</span><span>${fmt(p[1])}</span></div>`);
       });
       if (!rows.length) return hide();
       tipEl.innerHTML = `<div class="tt-h">${labels[idx]}</div>${rows.join("")}`;
@@ -166,38 +157,11 @@
     svg.addEventListener("touchend", hide);
   }
 
-  function prevQuarter(period) {
-    const m = /^(\d{4})Q([1-4])$/.exec(period || "");
-    if (!m) return null;
-    let y = Number(m[1]), q = Number(m[2]) - 1;
-    if (!q) { y -= 1; q = 4; }
-    return `${y}Q${q}`;
-  }
-
-  function prevYear(period) {
-    const m = /^(\d{4})Q([1-4])$/.exec(period || "");
-    return m ? `${Number(m[1]) - 1}Q${m[2]}` : null;
-  }
-
-  function opDelta(periods, period, field, kind) {
-    const cur = periods[period] && periods[period][field];
-    const prior = kind === "qoq" ? prevQuarter(period) : prevYear(period);
-    const old = prior && periods[prior] && periods[prior][field];
-    if (cur == null || old == null || old === 0) return null;
-    return (cur - old) / Math.abs(old) * 100;
-  }
-
   function preparePeriods(periods) {
-    const labels = Object.keys(periods).sort();
-    for (const period of labels) {
-      const row = periods[period] || {};
+    for (const row of Object.values(periods)) {
       row.contractObserved = row.contractTotal ?? row.contractCurrent ?? null;
-      const previous = periods[prevQuarter(period)] || null;
-      const inv = row.inventory;
-      const rev = row.revenue;
-      const prevInv = previous && previous.inventory;
-      const avgInventory = inv == null ? null : (prevInv == null ? inv : (inv + prevInv) / 2);
-      row[TURNOVER_FIELD] = avgInventory == null || rev == null || rev <= 0 ? null : (avgInventory / rev) * QUARTER_DAYS;
+      delete row.contractAndReceipts;
+      delete row.inventoryTurnoverDays;
     }
   }
 
@@ -213,56 +177,14 @@
       });
   }
 
-  function latestValue(periods, labels, field) {
-    const period = [...labels].reverse().find((p) => periods[p] && periods[p][field] != null);
-    return period ? [period, periods[period][field]] : [null, null];
-  }
-
-  async function loadOperating(panel) {
-    if (panel.__operatingDataPromise) return panel.__operatingDataPromise;
-    const code = panel.querySelector(".panel-head h3")?.textContent.trim().match(/^\d+/)?.[0];
-    panel.__operatingDataPromise = code
-      ? fetch(`data/operating/${code}.json`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : null).catch(() => null)
-      : Promise.resolve(null);
-    const data = await panel.__operatingDataPromise;
-    const periods = data?.periods || {};
-    preparePeriods(periods);
-    return { periods, labels: Object.keys(periods).sort() };
-  }
-
-  function removeCustomerReceipts(root = document) {
-    function ensureHideStyle() {
-      let style = document.getElementById("customer-receipts-rerender-hide");
-      if (!style) {
-        style = document.createElement("style");
-        style.id = "customer-receipts-rerender-hide";
-        document.head.appendChild(style);
-      }
-      return style;
-    }
-    const table = document.getElementById("tbl");
-    if (table) {
-      const indexes = [...table.querySelectorAll("thead th")]
-        .map((th, index) => ({ th, index }))
-        .filter(({ th }) => CUSTOMER_KEYS.has(th.dataset.k) || th.textContent.includes(CUSTOMER_LABEL))
-        .map(({ index }) => index);
-      if (indexes.length) table.dataset.hiddenReceiptIndexes = indexes.join(",");
-      const finalIndexes = (table.dataset.hiddenReceiptIndexes || "").split(",").filter(Boolean).map(Number);
-      ensureHideStyle().textContent = finalIndexes
-        .map((i) => `#tbl th:nth-child(${i + 1}),#tbl td:nth-child(${i + 1}){display:none!important}`)
-        .join("\n");
-    }
-    root.querySelectorAll(".column-chip,#sortMobile option,#opMetric option,.scard-metrics .m,.op-summary .op-kpi,#opCombinedNote").forEach((el) => {
-      const key = el.dataset?.column || el.value || "";
-      if (CUSTOMER_KEYS.has(key) || key === "customerReceiptsTotal" || key === "contractAndReceipts" || el.textContent.includes(CUSTOMER_LABEL)) el.remove();
+  function cleanCustomerAndTurnover(panel) {
+    panel.querySelectorAll("#opMetric option").forEach((option) => {
+      if (HIDDEN_KEYS.has(option.value) || option.textContent.includes(CUSTOMER_LABEL) || option.textContent.includes(TURNOVER_LABEL)) option.remove();
     });
-    root.querySelectorAll(".note").forEach((el) => {
-      if (!el.textContent.includes(CUSTOMER_LABEL)) return;
-      el.textContent = el.textContent
-        .replace(/客戶暫收款獨立儲存。/g, "")
-        .replace(/合約負債[＋+]客戶暫收款/g, "合約負債")
-        .replace(/；任一項缺值即不顯示合計。/g, "。");
+    panel.querySelectorAll(".op-summary .op-kpi, .scard-metrics .m").forEach((el) => {
+      if (el.textContent.includes(CUSTOMER_LABEL) || el.textContent.includes(TURNOVER_LABEL)) el.remove();
     });
+    panel.querySelectorAll("#opCombinedNote, .op-turnover-note").forEach((el) => el.remove());
   }
 
   async function enhanceCompareChart(panel) {
@@ -275,17 +197,24 @@
     head.classList.add("op-compare-head");
 
     const titleBlock = document.createElement("div");
-    titleBlock.innerHTML = `<strong>四項指標比較</strong><span>各系列首個可用期＝100；存貨周轉天數越低通常越好</span>`;
+    titleBlock.innerHTML = `<strong>三項指標比較</strong><span>各系列首個可用期＝100</span>`;
     const options = document.createElement("div");
     options.className = "op-compare-options";
     options.setAttribute("role", "group");
-    options.setAttribute("aria-label", "選擇要顯示於四項指標比較圖的系列");
+    options.setAttribute("aria-label", "選擇要顯示於三項指標比較圖的系列");
     options.innerHTML = SERIES.map((s) =>
       `<label><input type="checkbox" data-op-compare-field="${s.field}" checked> ${s.name}</label>`
     ).join("");
     head.replaceChildren(titleBlock, options);
 
-    const { periods, labels } = await loadOperating(panel);
+    svg.innerHTML = `<text x="450" y="125" text-anchor="middle" class="tick">載入中…</text>`;
+    const code = panel.querySelector(".panel-head h3")?.textContent.trim().match(/^\d+/)?.[0];
+    if (!code) return;
+    const data = await fetch(`data/operating/${code}.json`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : null).catch(() => null);
+    const periods = data?.periods || {};
+    preparePeriods(periods);
+    const labels = Object.keys(periods).sort();
+
     const redraw = () => {
       let checked = [...options.querySelectorAll("input:checked")].map((input) => input.dataset.opCompareField);
       if (!checked.length) {
@@ -303,53 +232,6 @@
     redraw();
   }
 
-  async function addTurnoverSummary(panel) {
-    if (panel.dataset.turnoverSummaryAdded === "1") return;
-    const summary = panel.querySelector(".op-summary");
-    if (!summary) return;
-    const { periods, labels } = await loadOperating(panel);
-    const [period, value] = latestValue(periods, labels, TURNOVER_FIELD);
-    const box = document.createElement("div");
-    box.className = "op-kpi";
-    box.innerHTML = `<div class="k">存貨周轉天數</div><div class="v">${value == null ? "—" : fmt(value, 1) + " 天"}</div><div class="op-sub">${period || "尚無資料"} · 營收估算</div>`;
-    const inventoryBox = [...summary.querySelectorAll(".op-kpi")].find((el) => el.textContent.includes("存貨"));
-    if (inventoryBox) inventoryBox.after(box);
-    else summary.appendChild(box);
-    panel.dataset.turnoverSummaryAdded = "1";
-  }
-
-  function addTurnoverOption(panel) {
-    const select = panel.querySelector("#opMetric");
-    if (!select || select.querySelector(`option[value="${TURNOVER_FIELD}"]`)) return;
-    const option = document.createElement("option");
-    option.value = TURNOVER_FIELD;
-    option.textContent = "4) 存貨周轉天數";
-    const revenue = [...select.options].find((o) => o.value === "revenue");
-    if (revenue) select.insertBefore(option, revenue);
-    else select.appendChild(option);
-  }
-
-  async function renderTurnoverSelected(panel) {
-    const select = panel.querySelector("#opMetric");
-    if (!select || select.value !== TURNOVER_FIELD) return;
-    const mode = panel.querySelector("[data-op-mode][aria-pressed='true']")?.dataset.opMode || "amount";
-    const { periods, labels } = await loadOperating(panel);
-    const points = labels.map((period) => {
-      if (mode === "amount") return [period, periods[period]?.[TURNOVER_FIELD] ?? null];
-      return [period, opDelta(periods, period, TURNOVER_FIELD, mode)];
-    });
-    panel.querySelector("#opSelectedTitle").textContent = "存貨周轉天數";
-    panel.querySelector("#opSelectedUnit").textContent = mode === "amount" ? "天" : "%";
-    const note = panel.querySelector("#opSourceNote");
-    if (note) note.textContent = "存貨周轉天數以「平均存貨 ÷ 季營收 × 91.25 天」估算；因目前資料未含銷貨成本，這是營收近似版。";
-    lineChart(
-      panel.querySelector("#opSelectedChart"),
-      panel.querySelector("#opSelectedTip"),
-      [{ key: TURNOVER_FIELD, name: "存貨周轉天數", color: "var(--accent)", points }],
-      { unit: mode === "amount" ? "天" : "%", allowNegative: mode !== "amount", height: MOBILE.matches ? 220 : 250 }
-    );
-  }
-
   function moveModeControls(panel) {
     if (panel.dataset.modeMoved === "1") return;
     const modeControls = [...panel.querySelectorAll(".op-controls")]
@@ -361,32 +243,17 @@
     panel.dataset.modeMoved = "1";
   }
 
-  function bindTurnoverEvents(panel) {
-    if (panel.dataset.turnoverEventsBound === "1") return;
-    panel.dataset.turnoverEventsBound = "1";
-    panel.querySelector("#opMetric")?.addEventListener("change", () => setTimeout(() => renderTurnoverSelected(panel), 0));
-    panel.querySelectorAll("[data-op-mode]").forEach((button) => {
-      button.addEventListener("click", () => setTimeout(() => renderTurnoverSelected(panel), 0));
-    });
-    MOBILE.addEventListener("change", () => renderTurnoverSelected(panel));
-  }
-
   function enhance(panel) {
     if (!panel || panel.dataset.opUiEnhanced === "1") return;
     panel.dataset.opUiEnhanced = "1";
     injectStyle();
-    removeCustomerReceipts(panel);
+    cleanCustomerAndTurnover(panel);
     moveModeControls(panel);
-    addTurnoverOption(panel);
-    bindTurnoverEvents(panel);
-    addTurnoverSummary(panel);
     enhanceCompareChart(panel);
   }
 
   const observer = new MutationObserver(() => {
-    removeCustomerReceipts(document);
     document.querySelectorAll(".overlay .panel").forEach(enhance);
   });
   observer.observe(document.body, { childList: true, subtree: true });
-  removeCustomerReceipts(document);
 })();
