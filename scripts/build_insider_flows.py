@@ -1,9 +1,14 @@
-"""Collect insider buy/sell flow data and build compact site JSON.
+"""Build reliable insider ownership / transfer-declaration data for the site.
 
-Outputs docs/data/insider_flows.json.
-Values are in board lots (張). Positive values are insider buys; negative
-values are insider sells / declared transfers. Current-only OpenAPI snapshots
-accumulate history from the first successful run.
+Sources:
+- t187ap11_*: latest monthly insider/director holding balances. We save one
+  company-level snapshot per reported month and derive month-over-month change
+  only when two monthly snapshots exist.
+- t187ap12_*: daily insider share-transfer *pre-filing* declarations. These are
+  NOT executions, so the site labels them as transfer declarations.
+
+Output: docs/data/insider_flows.json
+All share quantities are converted to board lots (張, 1 lot = 1,000 shares).
 """
 from __future__ import annotations
 
@@ -13,202 +18,262 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
-from util import DATA_DIR, get_json, log, num, read_json, roc_to_date, rows_from_fields, write_json
+from util import DATA_DIR, get_json, log, num, read_json, roc_ym, roc_to_date, rows_from_fields, write_json
 
 OUT = DATA_DIR / "insider_flows.json"
+PRICES = DATA_DIR / "prices.json"
 
-SOURCES = [
-    {"name": "twse_transfer", "kind": "transfer", "market": "listed", "url": "https://openapi.twse.com.tw/v1/opendata/t187ap12_L"},
-    {"name": "tpex_transfer", "kind": "transfer", "market": "otc", "url": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap12_O"},
-    {"name": "esb_transfer", "kind": "transfer", "market": "esb", "url": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap12_R", "optional": True},
-    {"name": "twse_holding", "kind": "holding", "market": "listed", "url": "https://openapi.twse.com.tw/v1/opendata/t187ap11_L", "optional": True},
-    {"name": "tpex_holding", "kind": "holding", "market": "otc", "url": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap11_O", "optional": True},
-    {"name": "esb_holding", "kind": "holding", "market": "esb", "url": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap11_R", "optional": True},
+TRANSFER_SOURCES = [
+    {"name": "twse", "market": "listed", "url": "https://openapi.twse.com.tw/v1/opendata/t187ap12_L"},
+    {"name": "tpex", "market": "otc", "url": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap12_O"},
+    {"name": "esb", "market": "esb", "url": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap12_R", "optional": True},
+]
+HOLDING_SOURCES = [
+    {"name": "twse", "market": "listed", "url": "https://openapi.twse.com.tw/v1/opendata/t187ap11_L"},
+    {"name": "tpex", "market": "otc", "url": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap11_O"},
+    {"name": "esb", "market": "esb", "url": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap11_R", "optional": True},
 ]
 
 WINDOWS = {"d1": 1, "d5": 5, "d10": 10, "d30": 30}
-KEEP_DAYS = 420
+KEEP_TRANSFER_DAYS = 420
+KEEP_HOLDING_MONTHS = 36
 TW = timezone(timedelta(hours=8))
 
 
-def clean_code(v: Any) -> str | None:
-    m = re.search(r"\d{4}", str(v or ""))
+def clean_code(value: Any) -> str | None:
+    m = re.search(r"\d{4}", str(value or ""))
     return m.group(0) if m else None
 
 
-def pick(row: dict[str, Any], *needles: str) -> Any:
-    for k, v in row.items():
-        text = re.sub(r"\s+", "", str(k))
-        if all(n in text for n in needles):
-            return v
+def norm_key(value: Any) -> str:
+    return re.sub(r"\s+", "", str(value or ""))
+
+
+def pick(row: dict[str, Any], *candidates: str) -> Any:
+    """Pick the first exact-ish field name, ignoring whitespace."""
+    normalized = {norm_key(k): v for k, v in row.items()}
+    for candidate in candidates:
+        key = norm_key(candidate)
+        if key in normalized:
+            return normalized[key]
     return None
-
-
-def row_date(row: dict[str, Any]) -> date | None:
-    for needles in (("出表", "日期"), ("申報", "日期"), ("資料", "日期"), ("日期",)):
-        v = pick(row, *needles)
-        if v:
-            parsed = roc_to_date(str(v))
-            if parsed:
-                return parsed
-    return None
-
-
-def row_month(row: dict[str, Any]) -> date | None:
-    v = pick(row, "資料", "年月") or pick(row, "年月")
-    s = re.sub(r"\D", "", str(v or ""))
-    if len(s) not in (5, 6):
-        return None
-    try:
-        y = int(s[:-2]) + 1911
-        m = int(s[-2:])
-        if not 1 <= m <= 12:
-            return None
-        nxt = date(y + (m == 12), 1 if m == 12 else m + 1, 1)
-        return nxt - timedelta(days=1)
-    except ValueError:
-        return None
 
 
 def lots(value: Any) -> float:
-    v = num(value)
-    if v is None:
-        return 0.0
-    return round(v / 1000.0, 3)
+    n = num(value)
+    return 0.0 if n is None else round(n / 1000.0, 3)
 
 
-def transfer_lots(row: dict[str, Any]) -> float:
-    candidates: list[Any] = []
-    for k, v in row.items():
-        key = re.sub(r"\s+", "", str(k))
-        if "最大" in key or "每日" in key or "轉讓後" in key or "保留運用" in key:
-            continue
-        if "轉讓股數" in key or ("預定" in key and "轉讓" in key):
-            candidates.append(v)
-    if candidates:
-        return max((lots(v) for v in candidates), default=0.0)
-    return lots(pick(row, "轉讓", "股數"))
+def parse_daily_date(row: dict[str, Any]) -> date | None:
+    raw = pick(row, "出表日期", "Date", "申報日期", "資料日期")
+    return roc_to_date(str(raw or ""))
 
 
-def holding_buy_sell(row: dict[str, Any]) -> tuple[float, float]:
-    buy = 0.0
-    sell = 0.0
-    for k, v in row.items():
-        key = re.sub(r"\s+", "", str(k))
-        if any(skip in key for skip in ("私募", "信託", "設質", "解質", "目前", "上月", "月底", "累計")):
-            continue
-        val = lots(v)
-        if not val:
-            continue
-        is_market = any(x in key for x in ("集中", "市場", "買進", "賣出"))
-        if "增加" in key or "買進" in key:
-            if is_market or "本月" in key:
-                buy += val
-        elif "減少" in key or "賣出" in key:
-            if is_market or "本月" in key:
-                sell += val
-    return round(buy, 3), round(sell, 3)
+def parse_month(row: dict[str, Any]) -> str | None:
+    raw = str(pick(row, "資料年月") or "").strip()
+    parsed = roc_ym(raw)
+    if not parsed:
+        return None
+    y, m = parsed
+    return f"{y:04d}-{m:02d}"
 
 
-def normalize_source(src: dict[str, Any]) -> list[dict[str, Any]]:
+def fetch_rows(src: dict[str, Any]) -> list[dict[str, Any]]:
     try:
-        payload = get_json(src["url"], tries=2)
+        payload = get_json(src["url"], tries=3)
     except Exception as exc:  # noqa: BLE001
         if src.get("optional"):
-            log(f"  跳過 {src['name']}: {exc}")
+            log(f"  跳過 {src['name']}：{exc}")
             return []
         raise
-    rows = rows_from_fields(payload)
+    return rows_from_fields(payload)
+
+
+def transfer_rows(src: dict[str, Any]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
-    for row in rows:
-        code = clean_code(pick(row, "公司", "代號") or pick(row, "股票", "代號") or pick(row, "代號") or pick(row, "Code"))
-        if not code:
+    for row in fetch_rows(src):
+        code = clean_code(pick(row, "公司代號", "SecuritiesCompanyCode", "股票代號", "Code"))
+        d = parse_daily_date(row)
+        amount = lots(pick(row, "預定轉讓方式及股數-轉讓股數", "預定轉讓總股數-自有持股"))
+        if not code or not d or amount <= 0:
             continue
-        if src["kind"] == "transfer":
-            d = row_date(row)
-            sell = transfer_lots(row)
-            buy = 0.0
-        else:
-            d = row_month(row)
-            buy, sell = holding_buy_sell(row)
-        if not d or (not buy and not sell):
-            continue
-        out.append({"date": d.isoformat(), "code": code, "market": src["market"], "source": src["kind"], "buy": buy, "sell": sell})
-    log(f"  {src['name']}：{len(out)} 筆可用事件")
+        out.append({
+            "date": d.isoformat(),
+            "code": code,
+            "market": src["market"],
+            "source": src["name"],
+            "lots": amount,
+        })
+    log(f"  {src['name']} 轉讓申報：{len(out)} 筆")
     return out
 
 
-def load_existing() -> dict[str, dict[str, dict[str, Any]]]:
-    old = read_json(OUT, {})
-    records: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
-    for code, obj in (old.get("stocks") or {}).items():
-        for item in obj.get("series") or []:
-            if not isinstance(item, list) or len(item) < 4:
-                continue
-            d, buy, sell, net = item[:4]
-            source = item[4] if len(item) > 4 else "legacy"
-            records[code][f"{d}|{source}"] = {"date": d, "code": code, "source": source, "buy": float(buy or 0), "sell": float(abs(sell or 0)), "net": float(net or 0)}
-    return records
+def holding_snapshot(src: dict[str, Any]) -> dict[tuple[str, str], float]:
+    """Return {(code, month): total lots}.
 
-
-def prune(records: dict[str, dict[str, dict[str, Any]]], anchor: date) -> None:
-    cutoff = anchor - timedelta(days=KEEP_DAYS)
-    for code in list(records):
-        records[code] = {k: v for k, v in records[code].items() if datetime.strptime(v["date"], "%Y-%m-%d").date() >= cutoff}
-        if not records[code]:
-            del records[code]
-
-
-def build_output(records: dict[str, dict[str, dict[str, Any]]]) -> dict[str, Any]:
-    all_dates = [v["date"] for per_code in records.values() for v in per_code.values()]
-    anchor = max((datetime.strptime(d, "%Y-%m-%d").date() for d in all_dates), default=date.today())
-    prune(records, anchor)
-    stocks: dict[str, Any] = {}
-    for code, per_code in sorted(records.items()):
-        series = []
-        for rec in sorted(per_code.values(), key=lambda x: (x["date"], x["source"])):
-            buy = round(float(rec.get("buy") or 0), 3)
-            sell = round(float(rec.get("sell") or 0), 3)
-            net = round(buy - sell, 3)
-            if buy or sell:
-                series.append([rec["date"], buy, sell, net, rec.get("source", "")])
-        if not series:
+    t187ap11 may repeat the same person under multiple titles. To avoid double
+    counting, keep the maximum disclosed holding for each (code, month, name)
+    and then sum unique names.
+    """
+    per_person: dict[tuple[str, str, str], float] = {}
+    for row in fetch_rows(src):
+        code = clean_code(pick(row, "公司代號", "SecuritiesCompanyCode", "股票代號", "Code"))
+        month = parse_month(row)
+        name = str(pick(row, "姓名", "Name") or "").strip()
+        shares = lots(pick(row, "目前持股", "目前持有股數-自有持股"))
+        if not code or not month or not name or shares < 0:
             continue
-        summary: dict[str, float | None] = {}
-        for key, days in WINDOWS.items():
-            start = anchor - timedelta(days=days - 1)
-            net = 0.0
-            for d, buy, sell, *_ in series:
-                day = datetime.strptime(d, "%Y-%m-%d").date()
-                if start <= day <= anchor:
-                    net += float(buy or 0) - float(sell or 0)
-            summary[key] = round(net, 3) if abs(net) >= 0.001 else 0.0
-        stocks[code] = {"summary": summary, "series": series[-180:]}
+        key = (code, month, name)
+        per_person[key] = max(per_person.get(key, 0.0), shares)
+
+    totals: dict[tuple[str, str], float] = defaultdict(float)
+    for (code, month, _name), shares in per_person.items():
+        totals[(code, month)] += shares
+    log(f"  {src['name']} 持股月報：{len(totals)} 檔/月")
+    return {k: round(v, 3) for k, v in totals.items()}
+
+
+def load_existing() -> tuple[dict[str, dict[str, float]], dict[str, dict[str, float]]]:
+    """Load transfer and holding history, accepting the previous beta format."""
+    old = read_json(OUT, {}) or {}
+    transfers: dict[str, dict[str, float]] = defaultdict(dict)
+    holdings: dict[str, dict[str, float]] = defaultdict(dict)
+
+    for code, obj in (old.get("stocks") or {}).items():
+        transfer = obj.get("transfer") or {}
+        for item in transfer.get("series") or []:
+            if isinstance(item, list) and len(item) >= 2:
+                d, amount = str(item[0]), float(item[1] or 0)
+                if amount > 0:
+                    transfers[code][d] = round(transfers[code].get(d, 0.0) + amount, 3)
+
+        # Previous beta format: [date, buy, sell, net, source].
+        if not transfer:
+            for item in obj.get("series") or []:
+                if isinstance(item, list) and len(item) >= 3:
+                    d = str(item[0])
+                    amount = abs(float(item[2] or 0))
+                    if amount > 0:
+                        transfers[code][d] = round(transfers[code].get(d, 0.0) + amount, 3)
+
+        holding = obj.get("holding") or {}
+        for item in holding.get("series") or []:
+            if isinstance(item, list) and len(item) >= 2:
+                month, total = str(item[0]), float(item[1] or 0)
+                holdings[code][month] = total
+    return transfers, holdings
+
+
+def trading_anchor_and_starts() -> tuple[date, dict[str, date]]:
+    prices = read_json(PRICES, {}) or {}
+    parsed: list[date] = []
+    for raw in prices.get("dates") or []:
+        try:
+            parsed.append(datetime.strptime(str(raw), "%Y-%m-%d").date())
+        except ValueError:
+            continue
+    parsed = sorted(set(parsed))
+    anchor = parsed[-1] if parsed else date.today()
+    usable = [d for d in parsed if d <= anchor]
+    starts: dict[str, date] = {}
+    for key, count in WINDOWS.items():
+        starts[key] = usable[max(0, len(usable) - count)] if usable else anchor - timedelta(days=count - 1)
+    return anchor, starts
+
+
+def prune(transfers: dict[str, dict[str, float]], holdings: dict[str, dict[str, float]], anchor: date) -> None:
+    cutoff = anchor - timedelta(days=KEEP_TRANSFER_DAYS)
+    for code in list(transfers):
+        transfers[code] = {
+            d: v for d, v in transfers[code].items()
+            if datetime.strptime(d, "%Y-%m-%d").date() >= cutoff
+        }
+        if not transfers[code]:
+            del transfers[code]
+
+    for code in list(holdings):
+        months = sorted(holdings[code])[-KEEP_HOLDING_MONTHS:]
+        holdings[code] = {m: holdings[code][m] for m in months}
+        if not holdings[code]:
+            del holdings[code]
+
+
+def build_output(transfers: dict[str, dict[str, float]], holdings: dict[str, dict[str, float]]) -> dict[str, Any]:
+    anchor, starts = trading_anchor_and_starts()
+    prune(transfers, holdings, anchor)
+    stocks: dict[str, Any] = {}
+
+    for code in sorted(set(transfers) | set(holdings)):
+        transfer_series = [[d, round(v, 3)] for d, v in sorted(transfers.get(code, {}).items()) if v > 0]
+        transfer_summary: dict[str, float] = {}
+        for key, start in starts.items():
+            total = sum(
+                amount for d, amount in transfers.get(code, {}).items()
+                if start <= datetime.strptime(d, "%Y-%m-%d").date() <= anchor
+            )
+            transfer_summary[key] = round(total, 3)
+
+        holding_series: list[list[Any]] = []
+        months = sorted(holdings.get(code, {}))
+        previous: float | None = None
+        for month in months:
+            total = round(float(holdings[code][month]), 3)
+            delta = None if previous is None else round(total - previous, 3)
+            holding_series.append([month, total, delta])
+            previous = total
+
+        latest_month = months[-1] if months else None
+        latest_lots = holdings[code][latest_month] if latest_month else None
+        monthly_change = holding_series[-1][2] if holding_series else None
+
+        stocks[code] = {
+            "transfer": {
+                "summary": transfer_summary,
+                "series": transfer_series[-180:],
+            },
+            "holding": {
+                "latestMonth": latest_month,
+                "latestLots": round(latest_lots, 3) if latest_lots is not None else None,
+                "monthlyChange": monthly_change,
+                "series": holding_series[-36:],
+            },
+        }
+
     return {
         "asOf": anchor.isoformat(),
         "updatedAt": datetime.now(TW).isoformat(timespec="seconds"),
         "unit": "張",
-        "note": "紅色為內部人市場買進；綠色向下為內部人賣出/持股轉讓。OpenAPI 若只提供最新快照，歷史自本站開始累積。",
+        "windows": WINDOWS,
+        "note": (
+            "內部人轉讓申報為事前申報，不代表已成交；1/5/10/30天依最近交易日區間統計。"
+            "持股月增減由官方持股餘額月報相鄰月份快照計算，需本站累積至少兩個月份後才有變化值。"
+        ),
         "stocks": stocks,
     }
 
 
 def main() -> int:
-    records = load_existing()
-    for src in SOURCES:
-        for ev in normalize_source(src):
-            key = f"{ev['date']}|{ev['source']}"
-            prev = records[ev["code"]].get(key)
-            if prev:
-                prev["buy"] = round(float(prev.get("buy") or 0) + ev["buy"], 3)
-                prev["sell"] = round(float(prev.get("sell") or 0) + ev["sell"], 3)
-                prev["net"] = round(float(prev["buy"]) - float(prev["sell"]), 3)
-            else:
-                ev["net"] = round(ev["buy"] - ev["sell"], 3)
-                records[ev["code"]][key] = ev
-    out = build_output(records)
+    transfers, holdings = load_existing()
+
+    # Aggregate the current fetch first, then REPLACE the same date in persisted
+    # history. This prevents the several daily workflow runs from double counting.
+    fresh_transfers: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+    for src in TRANSFER_SOURCES:
+        for event in transfer_rows(src):
+            fresh_transfers[event["code"]][event["date"]] += float(event["lots"])
+    for code, per_day in fresh_transfers.items():
+        for d, amount in per_day.items():
+            transfers[code][d] = round(amount, 3)
+
+    for src in HOLDING_SOURCES:
+        for (code, month), total in holding_snapshot(src).items():
+            holdings[code][month] = round(total, 3)
+
+    out = build_output(transfers, holdings)
     write_json(OUT, out)
-    log(f"完成：{len(out['stocks'])} 檔，asOf={out['asOf']}")
+    transfer_codes = sum(1 for obj in out["stocks"].values() if obj["transfer"]["series"])
+    holding_codes = sum(1 for obj in out["stocks"].values() if obj["holding"]["series"])
+    log(f"完成：轉讓申報 {transfer_codes} 檔；持股月報 {holding_codes} 檔；asOf={out['asOf']}")
     return 0
 
 
