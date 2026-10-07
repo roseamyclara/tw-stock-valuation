@@ -25,8 +25,17 @@
     metricControls.before(sourceNote);
   }
 
+  function loadInsiderFlows() {
+    if (document.querySelector('script[src*="assets/insider.js"]')) return;
+    const script = document.createElement("script");
+    script.src = "assets/insider.js?v=20261008-insider-flows";
+    script.async = false;
+    document.body.appendChild(script);
+  }
+
   function run() {
     injectStyle();
+    loadInsiderFlows();
     document.querySelectorAll(".overlay .panel").forEach(moveSourceNote);
   }
 
