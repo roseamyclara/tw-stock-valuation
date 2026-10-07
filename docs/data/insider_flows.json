@@ -1,1 +1,1 @@
-{"asOf":null,"updatedAt":null,"unit":"張","note":"內部人買賣資料尚未由每日更新累積；此檔先讓前端欄位可見。","windows":{"d1":1,"d5":5,"d10":10,"d30":30},"stocks":{}}
+{"asOf":null,"updatedAt":null,"unit":"張","note":"內部人轉讓申報為事前申報，不代表已成交；持股月增減需累積相鄰月份持股餘額快照。","windows":{"d1":1,"d5":5,"d10":10,"d30":30},"stocks":{}}\n
