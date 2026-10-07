@@ -1,14 +1,14 @@
-/* 營運先行指標面板 UI 增強：四項比較勾選、模式控制移到單項圖上方 */
+/* 營運先行指標面板 UI 增強：移除客戶暫收款、比較圖勾選、模式控制移到單項圖上方 */
 (() => {
   "use strict";
 
   const SERIES = [
     { field: "contractObserved", key: "contract", name: "合約負債", color: "var(--accent)" },
-    { field: "customerReceiptsTotal", key: "customer", name: "客戶暫收款", color: "var(--series-1)" },
     { field: "inventory", key: "inventory", name: "存貨", color: "var(--series-2)" },
     { field: "revenue", key: "revenue", name: "營收", color: "var(--series-3)" },
   ];
   const MOBILE = window.matchMedia("(max-width: 860px)");
+  const CUSTOMER_KEYS = new Set(["customer_receipts", "customer_receipts_qoq", "customer_receipts_yoy"]);
 
   const fmt = (v, d = 2) =>
     v === null || v === undefined || Number.isNaN(v) ? null : Number(v).toFixed(d);
@@ -29,6 +29,75 @@
       }
     `;
     document.head.appendChild(style);
+  }
+
+  function cleanCustomerText(text) {
+    return text
+      .replaceAll("、客戶暫收款", "")
+      .replaceAll("客戶暫收款、", "")
+      .replaceAll("合約負債＋客戶暫收款", "合約負債")
+      .replaceAll("＋客戶暫收款合計", "")
+      .replaceAll("客戶暫收款獨立儲存。", "")
+      .replaceAll("客戶暫收款", "");
+  }
+
+  function removeCustomerColumns() {
+    const table = document.getElementById("tbl");
+    if (!table) return;
+    const headers = [...table.querySelectorAll("thead th")];
+    const removeIndexes = headers
+      .map((th, index) => ({ th, index }))
+      .filter(({ th }) => CUSTOMER_KEYS.has(th.dataset.k) || th.textContent.includes("客戶暫收款"))
+      .map(({ th, index }) => {
+        th.remove();
+        return index;
+      })
+      .sort((a, b) => b - a);
+    if (!removeIndexes.length) return;
+    table.querySelectorAll("tbody tr").forEach((tr) => {
+      const cells = [...tr.children];
+      removeIndexes.forEach((index) => cells[index]?.remove());
+    });
+  }
+
+  function removeCustomerOptions(root = document) {
+    root.querySelectorAll(".column-chip, #sortMobile option, #opMetric option").forEach((el) => {
+      const key = el.dataset?.column || el.value || "";
+      if (CUSTOMER_KEYS.has(key) || key === "customerReceiptsTotal" || key === "contractAndReceipts" || el.textContent.includes("客戶暫收款")) {
+        el.remove();
+      }
+    });
+
+    const metric = root.querySelector("#opMetric");
+    if (metric && (!metric.value || metric.value === "customerReceiptsTotal" || metric.value === "contractAndReceipts")) {
+      metric.value = "contractObserved";
+      metric.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  }
+
+  function removeCustomerCards(root = document) {
+    root.querySelectorAll(".scard-metrics .m").forEach((item) => {
+      if (item.textContent.includes("客戶暫收款")) item.remove();
+    });
+  }
+
+  function removeCustomerPanelParts(root = document) {
+    root.querySelectorAll(".op-summary .op-kpi").forEach((item) => {
+      if (item.textContent.includes("客戶暫收款")) item.remove();
+    });
+    root.querySelector("#opCombinedNote")?.remove();
+    const compare = root.querySelector("#opCompareChart");
+    if (compare) compare.setAttribute("aria-label", "合約負債、存貨、營收標準化比較");
+    root.querySelectorAll(".panel .note").forEach((note) => {
+      if (note.textContent.includes("客戶暫收款")) note.textContent = cleanCustomerText(note.textContent);
+    });
+  }
+
+  function cleanupCustomerReceipts(root = document) {
+    removeCustomerColumns();
+    removeCustomerOptions(root);
+    removeCustomerCards(root);
+    removeCustomerPanelParts(root);
   }
 
   function lineChart(svg, tipEl, series, opts = {}) {
@@ -62,9 +131,8 @@
       return el;
     };
 
-    const TICKS = 5;
-    for (let i = 0; i <= TICKS; i++) {
-      const v = lo + ((hi - lo) * i) / TICKS;
+    for (let i = 0; i <= 5; i++) {
+      const v = lo + ((hi - lo) * i) / 5;
       const y = Y(v);
       svg.appendChild(mk("line", { class: "gridline", x1: M.l, x2: W - M.r, y1: y, y2: y }));
       const t = mk("text", { class: "tick", x: M.l - 7, y: y + 3.5, "text-anchor": "end" });
@@ -155,8 +223,6 @@
   function preparePeriods(periods) {
     for (const row of Object.values(periods)) {
       row.contractObserved = row.contractTotal ?? row.contractCurrent ?? null;
-      row.contractAndReceipts = row.contractObserved == null || row.customerReceiptsTotal == null
-        ? null : row.contractObserved + row.customerReceiptsTotal;
     }
   }
 
@@ -182,11 +248,11 @@
     head.classList.add("op-compare-head");
 
     const titleBlock = document.createElement("div");
-    titleBlock.innerHTML = `<strong>四項指標比較</strong><span>各系列首個可用期＝100</span>`;
+    titleBlock.innerHTML = `<strong>三項指標比較</strong><span>各系列首個可用期＝100</span>`;
     const options = document.createElement("div");
     options.className = "op-compare-options";
     options.setAttribute("role", "group");
-    options.setAttribute("aria-label", "選擇要顯示於四項指標比較圖的系列");
+    options.setAttribute("aria-label", "選擇要顯示於三項指標比較圖的系列");
     options.innerHTML = SERIES.map((s) =>
       `<label><input type="checkbox" data-op-compare-field="${s.field}" checked> ${s.name}</label>`
     ).join("");
@@ -231,12 +297,17 @@
     if (!panel || panel.dataset.opUiEnhanced === "1") return;
     panel.dataset.opUiEnhanced = "1";
     injectStyle();
+    cleanupCustomerReceipts(panel);
     moveModeControls(panel);
     enhanceCompareChart(panel);
   }
 
   const observer = new MutationObserver(() => {
+    cleanupCustomerReceipts(document);
     document.querySelectorAll(".overlay .panel").forEach(enhance);
   });
+
+  injectStyle();
+  cleanupCustomerReceipts(document);
   observer.observe(document.body, { childList: true, subtree: true });
 })();
