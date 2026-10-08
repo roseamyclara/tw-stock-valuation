@@ -212,6 +212,8 @@ def build_output(transfers: dict[str, dict[str, float]], holdings: dict[str, dic
 
     for code in sorted(set(transfers) | set(holdings)):
         transfer_series = [[d, round(v, 3)] for d, v in sorted(transfers.get(code, {}).items()) if v > 0]
+        latest_transfer_date = transfer_series[-1][0] if transfer_series else None
+        latest_transfer_lots = transfer_series[-1][1] if transfer_series else None
         transfer_summary: dict[str, float] = {}
         for key, start in starts.items():
             total = sum(
@@ -242,6 +244,8 @@ def build_output(transfers: dict[str, dict[str, float]], holdings: dict[str, dic
 
         stocks[code] = {
             "transfer": {
+                "latestDate": latest_transfer_date,
+                "latestLots": latest_transfer_lots,
                 "summary": transfer_summary,
                 "series": transfer_series[-180:],
             },
@@ -261,8 +265,8 @@ def build_output(transfers: dict[str, dict[str, float]], holdings: dict[str, dic
         "windows": WINDOWS,
         "holdingWindows": HOLDING_WINDOWS,
         "note": (
-            "內部人轉讓申報為事前申報，不代表已成交；1/5/10/30天依最近交易日區間統計。"
-            "內部人持股增減以最新持股餘額對比1/3/6個月前同月份快照計算；缺少對應月份時維持空白。"
+            "表格使用最新資訊：轉讓申報顯示最近一次申報日與張數；持股增減顯示最新月報相較前一月的變化。"
+            "歷史分析仍保留轉讓1/5/10/30交易日與持股1/3/6個月彙總；轉讓申報不代表已成交。"
         ),
         "stocks": stocks,
     }
