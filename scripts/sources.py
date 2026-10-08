@@ -1,7 +1,8 @@
 """台灣官方開放資料來源清單。
 
-只使用證交所（TWSE）與櫃買中心（TPEx）公開發布、供程式取用的端點。
-公開資訊觀測站（MOPS）的網頁在 robots.txt 中被禁止爬取，本專案不使用。
+這個模組只使用證交所（TWSE）與櫃買中心（TPEx）公開發布、供程式取用的端點。
+日常快照不依賴 MOPS 網頁；合約負債、存貨與財報期營收由獨立的
+build_operating_leads.py 透過公開資訊觀測站「財務比較 E 點通」取得。
 
 端點都經過實地探測（見 reports/probe-report.md、reports/probe2-report.md）：
 
