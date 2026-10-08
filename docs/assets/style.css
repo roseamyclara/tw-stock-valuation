@@ -1289,7 +1289,7 @@ footer a:hover { color: var(--accent); border-bottom-color: var(--accent); }
 
 /* 個股價格表現：下拉選單切換期間，排序按鈕與選單各自操作。 */
 .return-sort, .insider-sort { color: inherit; font: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
-.return-period, .insider-period { display: block; margin-top: 6px; font: inherit; color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; }
+.return-period, .insider-period, .insider-holding-period { display: block; margin-top: 6px; font: inherit; color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; }
 .return-mobile { display: none; }
 @media (max-width: 860px) { .return-mobile { display: flex; align-items: center; gap: 8px; } }
 
@@ -1317,7 +1317,7 @@ footer a:hover { color: var(--accent); border-bottom-color: var(--accent); }
   .table-tools, .table-shell { display: none; }
 }
 
-#tbl .return-period { margin-left: auto; }
+#tbl .return-period, #tbl .insider-period, #tbl .insider-holding-period { margin-left: auto; }
 
 /* 欄位方塊：桌機可拖曳，手機及鍵盤可點選加入／移除。 */
 .column-picker { margin: 16px 0; padding: 16px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-1); }
@@ -1523,7 +1523,7 @@ body.off-hours { --accent:#087f8c; --accent-2:#27b8ac; --accent-soft:rgba(8,127,
 #tbl th[draggable="true"] { cursor:grab; user-select:none; }
 #tbl th[draggable="true"]:active { cursor:grabbing; }
 #tbl th[draggable="true"]:hover { color:var(--accent); }
-#tbl th .return-period { cursor:pointer; }
+#tbl th .return-period, #tbl th .insider-period, #tbl th .insider-holding-period { cursor:pointer; }
 .work-sheet .sheet-toolbar { background:none; border-radius:0; padding:4px 0 10px; border-bottom:1px solid var(--border); }
 .work-sheet .sheet-toolbar button { border-radius:0; padding:7px 12px; }
 .work-sheet .sheet-toolbar button:hover { background:none; color:var(--accent); text-decoration:underline; text-underline-offset:6px; }
