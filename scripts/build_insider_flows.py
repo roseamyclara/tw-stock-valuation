@@ -35,6 +35,7 @@ HOLDING_SOURCES = [
 ]
 
 WINDOWS = {"d1": 1, "d5": 5, "d10": 10, "d30": 30}
+HOLDING_WINDOWS = {"m1": 1, "m3": 3, "m6": 6}
 KEEP_TRANSFER_DAYS = 420
 KEEP_HOLDING_MONTHS = 36
 TW = timezone(timedelta(hours=8))
@@ -164,6 +165,12 @@ def load_existing() -> tuple[dict[str, dict[str, float]], dict[str, dict[str, fl
     return transfers, holdings
 
 
+def shift_month(month: str, delta: int) -> str:
+    y, m = map(int, month.split("-"))
+    idx = y * 12 + (m - 1) + delta
+    return f"{idx // 12:04d}-{idx % 12 + 1:02d}"
+
+
 def trading_anchor_and_starts() -> tuple[date, dict[str, date]]:
     prices = read_json(PRICES, {}) or {}
     parsed: list[date] = []
@@ -224,7 +231,14 @@ def build_output(transfers: dict[str, dict[str, float]], holdings: dict[str, dic
 
         latest_month = months[-1] if months else None
         latest_lots = holdings[code][latest_month] if latest_month else None
-        monthly_change = holding_series[-1][2] if holding_series else None
+        holding_summary: dict[str, float | None] = {}
+        for key, months_back in HOLDING_WINDOWS.items():
+            if not latest_month or latest_lots is None:
+                holding_summary[key] = None
+                continue
+            prior = holdings[code].get(shift_month(latest_month, -months_back))
+            holding_summary[key] = None if prior is None else round(float(latest_lots) - float(prior), 3)
+        monthly_change = holding_summary["m1"]
 
         stocks[code] = {
             "transfer": {
@@ -234,6 +248,7 @@ def build_output(transfers: dict[str, dict[str, float]], holdings: dict[str, dic
             "holding": {
                 "latestMonth": latest_month,
                 "latestLots": round(latest_lots, 3) if latest_lots is not None else None,
+                "summary": holding_summary,
                 "monthlyChange": monthly_change,
                 "series": holding_series[-36:],
             },
@@ -244,9 +259,10 @@ def build_output(transfers: dict[str, dict[str, float]], holdings: dict[str, dic
         "updatedAt": datetime.now(TW).isoformat(timespec="seconds"),
         "unit": "張",
         "windows": WINDOWS,
+        "holdingWindows": HOLDING_WINDOWS,
         "note": (
             "內部人轉讓申報為事前申報，不代表已成交；1/5/10/30天依最近交易日區間統計。"
-            "持股月增減由官方持股餘額月報相鄰月份快照計算，需本站累積至少兩個月份後才有變化值。"
+            "內部人持股增減以最新持股餘額對比1/3/6個月前同月份快照計算；缺少對應月份時維持空白。"
         ),
         "stocks": stocks,
     }
