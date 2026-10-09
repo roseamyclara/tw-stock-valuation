@@ -250,7 +250,7 @@
     // X 軸只標年份；再要求標籤之間至少隔 46px，避免年份擠在一起
     let lastYear = "", lastX = -Infinity;
     labels.forEach((l, i) => {
-      const y = String(l).slice(0, 4);
+      const y = opts.showMonths ? String(l) : String(l).slice(0, 4);
       if (y === lastYear) return;
       const x = X(i);
       if (x - lastX < 46) { lastYear = y; return; }
@@ -312,7 +312,8 @@
         rows.push(`<div class="tt-r"><span><span class="swatch" style="display:inline-block;background:${s.color}"></span> ${s.name}</span><span>${fmt(p[1])}${opts.unit || ""}</span></div>`);
       });
       if (!rows.length) return hide();
-      tipEl.innerHTML = `<div class="tt-h">${labels[idx]}</div>${rows.join("")}`;
+      const extra = opts.tooltipNote ? `<div class="tt-h">${esc(opts.tooltipNote(labels[idx]) || "")}</div>` : "";
+      tipEl.innerHTML = `<div class="tt-h">${labels[idx]}</div>${rows.join("")}${extra}`;
       tipEl.hidden = false;
       const wrapBox = tipEl.parentElement.getBoundingClientRect();
       let left = ev.clientX - wrapBox.left + 14;
@@ -884,6 +885,13 @@
       return `<div class="op-kpi"><div class="k">${title}</div><div class="v">${value == null ? "—" : human(value)}</div><div class="op-sub">${period || "尚無資料"}${source} · YoY ${period ? (cell(opDelta(period, field, "yoy"), 1, true)) : "—"}</div></div>`;
     };
 
+    const psHistory = d.psHist || [];
+    const psAvailable = psHistory.filter(p => p.v != null);
+    const psHasEstimates = psAvailable.some(p => p.basis !== "實際");
+    const psNote = psAvailable.length
+      ? `資料自 ${psAvailable[0].ym} 起；每月保留最後可用快照，本月持續更新。${psHasEstimates ? "含以當時營收推估的 P/S，游標可查看計算基礎。" : "P/S 依當時營收計算。"}缺值留白，更早年度尚無資料。`
+      : "尚無歷史 P/S；取得可用營收與市值後會自動累積。";
+
     const ov = document.createElement("div");
     ov.className = "overlay";
     ov.innerHTML = `<div class="panel" role="dialog" aria-modal="true" aria-label="${esc(base.n)} 詳細">
@@ -914,9 +922,9 @@
       }</p>
       <div class="kv">
         <div><div class="k">當月營收</div><div class="v">${rev.amt != null ? human(rev.amt * 1000) : "—"}</div></div>
-        <div><div class="k">年增率</div><div class="v">${cell(rev.yoy, 1, true)}</div></div>
-        <div><div class="k">累計年增率</div><div class="v">${cell(rev.cum_yoy, 1, true)}</div></div>
-        <div><div class="k">月增率</div><div class="v">${cell(rev.mom, 1, true)}</div></div>
+        <div><div class="k">年增率</div><div class="v">${cell(rev.yoy, 2, true)}</div></div>
+        <div><div class="k">累計年增率</div><div class="v">${cell(rev.cum_yoy, 2, true)}</div></div>
+        <div><div class="k">月增率</div><div class="v">${cell(rev.mom, 2, true)}</div></div>
       </div>
       <h4>獲利</h4>
       <p class="note">${fin.y ? `${fin.y} 年第 ${fin.q} 季累計` : "尚無財報資料"}</p>
@@ -962,6 +970,12 @@
       <div class="card" style="margin-top:12px"><div class="chart-wrap">
         <div class="chart-scroll"><svg class="chart" id="stockChart" role="img" aria-label="${esc(base.n)} 歷年本益比"></svg></div>
         <div class="tooltip" id="stockTip" hidden></div>
+      </div></div>
+      <h4>歷年股價營收比（P/S）</h4>
+      <p class="note" id="psHistoryNote">${esc(psNote)}</p>
+      <div class="card" style="margin-top:12px"><div class="chart-wrap">
+        <div class="chart-scroll"><svg class="chart" id="stockPsChart" role="img" aria-label="${esc(base.n)} 歷年股價營收比"></svg></div>
+        <div class="tooltip" id="stockPsTip" hidden></div>
       </div></div>
     </div>`;
     document.body.appendChild(ov);
@@ -1047,6 +1061,13 @@
     lineChart(ov.querySelector("#stockChart"), ov.querySelector("#stockTip"),
       hist.length ? [{ key: "pe", name: "本益比", color: SERIES[base.m], points: hist }] : [],
       { unit: "倍", height: MOBILE.matches ? 200 : 240 });
+    lineChart(ov.querySelector("#stockPsChart"), ov.querySelector("#stockPsTip"),
+      psAvailable.length ? [{ key: "ps", name: "股價營收比", color: "var(--series-2)", points: psHistory.map(p => [p.ym, p.v]) }] : [],
+      { unit: "倍", height: MOBILE.matches ? 200 : 240, showMonths: psHistory.length <= 24,
+        tooltipNote: month => {
+          const p = psHistory.find(p => p.ym === month);
+          return p ? `${p.d} · 營收 ${p.revenueMonth || "期別不明"} · ${p.basis}` : "";
+        } });
   }
 
   // ---------------------------------------------------------------- 事件

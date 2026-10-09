@@ -12,6 +12,9 @@ on:
       - "scripts/build_snapshot.py"
       - "scripts/util.py"
       - "scripts/test_revenue.py"
+      - "scripts/ps_history.py"
+      - "scripts/rebuild_history.py"
+      - "scripts/test_ps_history.py"
   schedule:
     - cron: "37 13,14,16 * * 1-5"
       timezone: "Asia/Taipei"
@@ -42,9 +45,9 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: 營收更新回歸測試
+      - name: 營收與歷史估值回歸測試
         working-directory: scripts
-        run: python -m unittest test_revenue
+        run: python -m unittest test_revenue test_ps_history
 
       - name: 抓取並計算最新快照
         working-directory: scripts

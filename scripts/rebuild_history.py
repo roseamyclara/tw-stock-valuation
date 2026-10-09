@@ -13,6 +13,7 @@ import json
 from collections import defaultdict
 from statistics import median
 
+from ps_history import PS_HISTORY, stock_series
 from util import DATA_DIR, log, read_json, rnd, write_json
 
 HIST_DIR = DATA_DIR / "history"
@@ -100,6 +101,7 @@ def main() -> None:
     fundamentals = read_json(DATA_DIR / "fundamentals.json", {}) or {}
     STOCK_DIR.mkdir(parents=True, exist_ok=True)
 
+    ps_months = read_json(PS_HISTORY, {}) or {}
     per_stock: dict[str, list] = defaultdict(list)
     for ym, snap in months.items():
         for code, vals in snap.get("s", {}).items():
@@ -118,6 +120,7 @@ def main() -> None:
             "m": s.get("m"),
             "i": s.get("i"),
             "hist": hist,
+            "psHist": stock_series(ps_months, code),
             # 只留最近 36 個月的累計營收，避免個股檔無限膨脹
             "revHist": dict(sorted((fund.get("rev_cum") or {}).items())[-36:]),
             "incHist": fund.get("income") or {},

@@ -14,6 +14,7 @@ from typing import Any
 import markets as M
 import sources as S
 from revenue import fetch_revenue
+from ps_history import update_ps_history
 from util import (
     DATA_DIR,
     log,
@@ -393,6 +394,7 @@ def main() -> int:
 
     if day:
         update_month_history(rows, day)
+        update_ps_history(rows, day, now_taipei().isoformat(timespec="seconds"))
 
     # 每日快照的後兩段：收當天收盤價，再由收盤價算漲幅排行與族群。
     # 順序不能顛倒 —— build_movers 需要上面剛寫好的 latest.json。
