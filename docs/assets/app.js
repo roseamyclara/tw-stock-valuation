@@ -887,10 +887,11 @@
 
     const psHistory = d.psHist || [];
     const psAvailable = psHistory.filter(p => p.v != null);
-    const psHasEstimates = psAvailable.some(p => p.basis !== "實際");
+    const psHasEstimates = psAvailable.some(p => p.basis === "估算");
+    const psHasRebuilt = psAvailable.some(p => p.basis === "歷史重建");
     const psNote = psAvailable.length
-      ? `資料自 ${psAvailable[0].ym} 起；每月保留最後可用快照，本月持續更新。${psHasEstimates ? "含以當時營收推估的 P/S，游標可查看計算基礎。" : "P/S 依當時營收計算。"}缺值留白，更早年度尚無資料。`
-      : "尚無歷史 P/S；取得可用營收與市值後會自動累積。";
+      ? `資料自 ${psAvailable[0].ym} 起；每月一筆，本月持續更新。${psHasRebuilt ? "歷史重建採當時股數 × 股價 ÷ 前一月底止完整12個月營收；興櫃用日均價。歷史申報可能事後更正，不代表當時已知資訊。" : ""}${psHasEstimates ? "含當時保存的估算值。" : ""}游標可查看日期與計算基礎；缺值留白。`
+      : "尚無可用歷史 P/S；取得完整營收與歷史股數後會自動累積。";
 
     const ov = document.createElement("div");
     ov.className = "overlay";
@@ -972,7 +973,7 @@
         <div class="tooltip" id="stockTip" hidden></div>
       </div></div>
       <h4>歷年股價營收比（P/S）</h4>
-      <p class="note" id="psHistoryNote">${esc(psNote)}</p>
+      <p class="note" id="psHistoryNote">${esc(psNote)} <a href="https://github.com/roseamyclara/tw-stock-valuation/blob/main/docs/ps-history-sources.md" target="_blank" rel="noopener">資料來源與計算說明 ↗</a></p>
       <div class="card" style="margin-top:12px"><div class="chart-wrap">
         <div class="chart-scroll"><svg class="chart" id="stockPsChart" role="img" aria-label="${esc(base.n)} 歷年股價營收比"></svg></div>
         <div class="tooltip" id="stockPsTip" hidden></div>

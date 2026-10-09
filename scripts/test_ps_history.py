@@ -48,6 +48,14 @@ class PsHistoryTests(unittest.TestCase):
         self.assertFalse(record_snapshot(store, [row(ps=None)], '2026-10-08', '2026-10-09T10:00:00'))
         self.assertEqual(store['2026-10']['stocks']['8102']['v'], 3.11)
 
+class MergeHistoryTests(unittest.TestCase):
+    def test_saved_snapshot_wins_over_reconstruction(self):
+        from ps_history import merge_history
+        old={'2026-08':{'asOf':'2026-08-31','stocks':{'8102':{'v':3.4,'basis':'歷史重建'}}}}
+        saved={'2026-08':{'asOf':'2026-08-31','stocks':{'8102':{'v':3.43,'basis':'估算'}}}}
+        self.assertEqual(merge_history(old,saved)['2026-08']['stocks']['8102']['v'],3.43)
+        self.assertEqual(old['2026-08']['stocks']['8102']['v'],3.4)
+
 
 if __name__ == '__main__':
     unittest.main()

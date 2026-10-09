@@ -13,7 +13,7 @@ import json
 from collections import defaultdict
 from statistics import median
 
-from ps_history import PS_HISTORY, stock_series
+from ps_history import PS_HISTORY, stock_series, load_reconstructed, merge_history
 from util import DATA_DIR, log, read_json, rnd, write_json
 
 HIST_DIR = DATA_DIR / "history"
@@ -101,7 +101,7 @@ def main() -> None:
     fundamentals = read_json(DATA_DIR / "fundamentals.json", {}) or {}
     STOCK_DIR.mkdir(parents=True, exist_ok=True)
 
-    ps_months = read_json(PS_HISTORY, {}) or {}
+    ps_months = merge_history(load_reconstructed(), read_json(PS_HISTORY, {}) or {})
     per_stock: dict[str, list] = defaultdict(list)
     for ym, snap in months.items():
         for code, vals in snap.get("s", {}).items():

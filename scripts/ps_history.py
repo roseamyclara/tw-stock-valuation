@@ -49,3 +49,23 @@ def stock_series(store: dict, code: str) -> list[dict]:
         result.append({"ym": month, "d": snapshot["asOf"], "v": value.get("v"),
                        "basis": value.get("basis", "無"), "revenueMonth": value.get("revenueMonth")})
     return result
+
+
+def load_reconstructed() -> dict:
+    """載入官方歷史重建值；與當時保存的快照分開保存，便於追溯。"""
+    result = {}
+    for path in sorted((DATA_DIR / 'ps_reconstructed').glob('[0-9][0-9][0-9][0-9].json')):
+        for month, snap in (read_json(path, {}) or {}).items():
+            result[month] = {
+                'asOf': snap['d'],
+                'stocks': {code: {'v': vals[0], 'basis': '歷史重建',
+                                 'revenueMonth': snap['revenueMonth'], 'market': vals[4]}
+                           for code, vals in snap['s'].items()}}
+    return result
+
+
+def merge_history(reconstructed: dict, snapshots: dict) -> dict:
+    result = {ym: {'asOf': s['asOf'], 'stocks': dict(s['stocks'])} for ym, s in reconstructed.items()}
+    # 原快照整月優先，避免混入另一交易日的數值。
+    result.update(snapshots)
+    return dict(sorted(result.items()))
