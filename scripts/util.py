@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import random
+import re
 import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -186,13 +187,18 @@ def roc_to_date(s: str) -> date | None:
 
 
 def roc_ym(s: str) -> tuple[int, int] | None:
-    """'11507' -> (2026, 7)"""
-    if not s or not s.strip().isdigit():
+    """接受 OpenAPI 的 11507、月份 CSV 的 115/7 與西元 2026-07。"""
+    s = str(s or "").strip()
+    match = re.fullmatch(r"(\d{3,4})[/-](\d{1,2})", s)
+    if match:
+        y, m = map(int, match.groups())
+    elif s.isdigit() and len(s) in (5, 6):
+        y, m = int(s[:-2]), int(s[-2:])
+    else:
         return None
-    s = s.strip()
-    if len(s) not in (5, 6):
+    if not 1 <= m <= 12:
         return None
-    return int(s[:-2]) + 1911, int(s[-2:])
+    return (y + 1911 if y < 1911 else y), m
 
 
 def to_roc(d: date) -> str:

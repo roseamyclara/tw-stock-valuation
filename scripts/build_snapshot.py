@@ -13,6 +13,7 @@ from typing import Any
 
 import markets as M
 import sources as S
+from revenue import fetch_revenue
 from util import (
     DATA_DIR,
     log,
@@ -70,6 +71,16 @@ def gather() -> tuple[dict[str, dict], dict[str, Any], Any]:
     """回傳 (個股資料, 來源狀態, 資料日期)。"""
     stocks: dict[str, dict] = {}
     status: dict[str, Any] = {}
+    saved = read_json(DATA_DIR / "fundamentals.json", {}) or {}
+    old_rows = read_json(DATA_DIR / "latest.json", []) or []
+
+    def revenue(market):
+        previous = {r["c"]: saved.get(r["c"], {}).get("revenue", {})
+                    for r in old_rows if r["m"] == market}
+        records, details = fetch_revenue(market, previous)
+        status[f"{market}_revenue"] = len(records)
+        status[f"{market}_revenue_details"] = details
+        return records
 
     def note(key: str, rows: list) -> list:
         status[key] = len(rows)
@@ -82,7 +93,7 @@ def gather() -> tuple[dict[str, dict], dict[str, Any], Any]:
     note("listed_daily", daily)
     val = M.norm_daily_listed(daily)
     profile = _shares_from(note("listed_profile", S.fetch("listed_profile")), ("公司代號", "Code"))
-    rev = M.norm_revenue(note("listed_revenue", S.fetch("listed_revenue")))
+    rev = revenue("listed")
     inc = M.norm_income(note("listed_income", S.fetch_income("listed")))
     merge(stocks, "listed", profile, val, rev, inc)
 
@@ -100,7 +111,7 @@ def gather() -> tuple[dict[str, dict], dict[str, Any], Any]:
                          "price": num(r.get("Close")) or num(r.get("Average"))}
     for code, v in M.norm_valuation_otc(note("otc_pe", S.fetch("otc_pe"))).items():
         val.setdefault(code, {}).update(v)
-    rev = M.norm_revenue(note("otc_revenue", S.fetch("otc_revenue")))
+    rev = revenue("otc")
     inc = M.norm_income(note("otc_income", S.fetch_income("otc")))
     merge(stocks, "otc", profile, val, rev, inc)
 
@@ -117,7 +128,7 @@ def gather() -> tuple[dict[str, dict], dict[str, Any], Any]:
             val[code] = {"name": str(r.get("CompanyName", "")).strip(),
                          "price": num(r.get("Average")) or num(r.get("LatestPrice"))
                                   or num(r.get("PreviousAveragePrice"))}
-    rev = M.norm_revenue(note("esb_revenue", S.fetch("esb_revenue")))
+    rev = revenue("esb")
     merge(stocks, "esb", profile, val, rev, {})
 
     return stocks, status, day
@@ -246,6 +257,8 @@ def finalise(stocks: dict[str, dict]) -> list[dict]:
                 "ym": month_key(*parsed) if parsed else None,
                 "amt": r.get("month"),
                 "note": r.get("note", ""),
+                "source": r.get("source"),
+                "publishedAt": r.get("publishedAt"),
                 "mom": rnd(r.get("mom")),
                 "yoy": rnd(r.get("yoy")),
                 "cum_yoy": rnd(r.get("cum_yoy")),
@@ -271,7 +284,9 @@ def update_fundamentals(stocks: dict[str, dict]) -> None:
         r = s.get("_rev") or {}
         i = s.get("_inc") or {}
         entry = store.setdefault(code, {})
-        if r.get("ym") and r.get("cum"):
+        if r.get("ym") and r.get("month") is not None:
+            entry["revenue"] = {k: v for k, v in r.items() if not k.startswith("_")}
+        if r.get("ym") and r.get("cum") is not None:
             parsed = roc_ym(r["ym"])
             if parsed:
                 entry.setdefault("rev_cum", {})[month_key(*parsed)] = r["cum"]

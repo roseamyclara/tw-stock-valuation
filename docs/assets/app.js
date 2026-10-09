@@ -103,6 +103,11 @@
     return `<span title="${month ? `${month} 持股餘額較前一月變化` : "最新持股月增減"}">${cell(v, 2, true)}</span><small class="profit-period">${esc(month)}</small>`;
   };
 
+  const revenueCell = (r, field) => {
+    const rev = r.rev || {};
+    return `${cell(rev[field], 2, true)}<small class="profit-period">${esc(rev.ym || "尚無營收月份")}</small>`;
+  };
+
   async function getJSON(path, fallback) {
     try {
       const r = await fetch(path, { cache: "no-cache" });
@@ -375,8 +380,9 @@
     const clean = String(note).trim();
     const text = !clean || /^[—–－-]+$/.test(clean) ? "公司未填寫原因" : clean;
     const marketPath = { listed: "sii", otc: "otc", esb: "rotc" }[r.m];
-    const source = `https://mopsov.twse.com.tw/nas/t21/${marketPath}/`;
-    return `<div class="revenue-note"><span>${esc(text)}</span><small>${esc(rev.ym || "")} · 公司申報原文 <a href="${source}" target="_blank" rel="noopener noreferrer">官方來源 ↗</a></small></div>`;
+    const source = rev.source && /^https:\/\/(mopsov\.twse\.com\.tw|openapi\.twse\.com\.tw|www\.tpex\.org\.tw)\//.test(rev.source)
+      ? rev.source : `https://mopsov.twse.com.tw/nas/t21/${marketPath}/`;
+    return `<div class="revenue-note"><span>${esc(text)}</span><small>${esc(rev.ym || "")} · 公司申報原文 <a href="${esc(source)}" target="_blank" rel="noopener noreferrer">官方來源 ↗</a></small></div>`;
   }
 
   function profitRecord(r) {
@@ -430,9 +436,9 @@
     { k: "ps", t: "股價營收比", get: (r) => (r.ps == null ? '<span class="na">—</span>' : cell(r.ps) + (r.ps_basis === "估算" ? '<span class="est">估</span>' : "")) },
     { k: "pb", t: "淨值比", get: (r) => cell(r.pb) },
     { k: "dy", t: "殖利率%", get: (r) => cell(r.dy) },
-    { k: "rev_yoy", t: "月營收年增%", get: (r) => cell(r.rev && r.rev.yoy, 1, true), val: (r) => r.rev && r.rev.yoy },
+    { k: "rev_yoy", t: "月營收年增%", get: (r) => revenueCell(r, "yoy"), val: (r) => r.rev && r.rev.yoy },
     { k: "rev_note", t: "營收變動說明", cls: "revenue-note-cell", get: revenueNote },
-    { k: "rev_cum", t: "累計年增%", get: (r) => cell(r.rev && r.rev.cum_yoy, 1, true), val: (r) => r.rev && r.rev.cum_yoy },
+    { k: "rev_cum", t: "累計年增%", get: (r) => revenueCell(r, "cum_yoy"), val: (r) => r.rev && r.rev.cum_yoy },
     { k: "contract", t: "合約負債", sel: "合約負債－流動", get: (r) => operatingAmountCell(r, "contractCurrent", "contractCurrentPeriod"), val: (r) => operatingOf(r.c).contractCurrent ?? null },
     { k: "contract_qoq", t: "合約負債QoQ%", get: (r) => operatingChangeCell(r, "contractCurrentChange", "qoq"), val: (r) => operatingChangeValue(r, "contractCurrentChange", "qoq") },
     { k: "contract_yoy", t: "合約負債YoY%", get: (r) => operatingChangeCell(r, "contractCurrentChange", "yoy"), val: (r) => operatingChangeValue(r, "contractCurrentChange", "yoy") },
@@ -1168,12 +1174,18 @@
 
     // 更新時間在窄螢幕以 CSS 隱藏，只留資料日期，避免頂欄被截斷
     $("asof").innerHTML = meta && meta.asOf
-      ? `${meta.asOf}<span class="asof-more">・更新於 ${esc((meta.updatedAt || "").replace("T", " ").slice(0, 16))}</span>`
+      ? `${meta.asOf}<span class="asof-more">・快照更新於 ${esc((meta.updatedAt || "").replace("T", " ").slice(0, 16))}</span>`
       : "尚無資料 — 請先在 GitHub Actions 執行一次「每日更新」";
 
     if (meta) {
       $("coverage").textContent =
         `共 ${meta.total} 檔：有本益比 ${meta.withPE}、有股價營收比 ${meta.withPS}、有月營收 ${meta.withRevenue}、有財報 ${meta.withFinancials}。`;
+    }
+
+    const revenueCoverage = $("revenueCoverage");
+    if (revenueCoverage) {
+      const months = [...new Set(state.rows.map(r => r.rev?.ym).filter(Boolean))].sort();
+      revenueCoverage.textContent = `營收資料月份：${months.join("、") || "尚無資料"}。各公司依申報進度更新；快照更新時間不代表最新營收已公告。`;
     }
 
     const cov = $("tagCoverage");

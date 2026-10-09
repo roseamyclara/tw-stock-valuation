@@ -4,6 +4,14 @@ name: 每日更新
 # 13:37 首抓、14:37 盤後定價後、15:07 補抓、16:37 興櫃盤後統計、19:23 備援。
 # GitHub 排程與資料來源皆可能延遲；避開 :00 / :30。
 on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/revenue.py"
+      - "scripts/markets.py"
+      - "scripts/build_snapshot.py"
+      - "scripts/util.py"
+      - "scripts/test_revenue.py"
   schedule:
     - cron: "37 13,14,16 * * 1-5"
       timezone: "Asia/Taipei"
@@ -33,6 +41,10 @@ jobs:
           cache: pip
 
       - run: pip install -r requirements.txt
+
+      - name: 營收更新回歸測試
+        working-directory: scripts
+        run: python -m unittest test_revenue
 
       - name: 抓取並計算最新快照
         working-directory: scripts

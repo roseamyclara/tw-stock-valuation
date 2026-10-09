@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
-from util import num, pos
+from util import num, pos, roc_ym, roc_to_date
 
 # 面額。台股絕大多數為 10 元；用股本回推股數時使用。
 PAR_VALUE = 10.0
@@ -195,8 +195,14 @@ def norm_revenue(rows: list[dict]) -> dict[str, dict]:
         code = str(_first(r, *REV_KEYS["code"]) or "").strip()
         if not code:
             continue
+        period = roc_ym(_first(r, *REV_KEYS["ym"]))
+        amount = num(_first(r, *REV_KEYS["month"]))
+        if not period or amount is None:
+            continue
+        published = roc_to_date(str(r.get("出表日期") or ""))
         rec = {
-            "ym": str(_first(r, *REV_KEYS["ym"]) or "").strip(),
+            "ym": f"{period[0] - 1911:03d}{period[1]:02d}",
+            "publishedAt": published.isoformat() if published else None,
             "industry": str(_first(r, *REV_KEYS["industry"]) or "").strip() or None,
             "name": str(_first(r, *REV_KEYS["name"]) or "").strip() or None,
             "month": num(_first(r, *REV_KEYS["month"])),
@@ -208,7 +214,9 @@ def norm_revenue(rows: list[dict]) -> dict[str, dict]:
             "cum_ly": num(_first(r, *REV_KEYS["cum_ly"])),
             "cum_yoy": num(_first(r, *REV_KEYS["cum_yoy"])),
         }
-        out[code] = rec
+        old = out.get(code)
+        if old is None or (rec["ym"], rec["publishedAt"] or "") >= (old["ym"], old["publishedAt"] or ""):
+            out[code] = rec
     return out
 
 

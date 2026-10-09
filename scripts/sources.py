@@ -1,7 +1,7 @@
 """台灣官方開放資料來源清單。
 
 只使用證交所（TWSE）與櫃買中心（TPEx）公開發布、供程式取用的端點。
-公開資訊觀測站（MOPS）的網頁在 robots.txt 中被禁止爬取，本專案不使用。
+月營收另由 revenue.py 合併 MOPS 官方月份 CSV，不逐家公司爬查詢頁。
 
 端點都經過實地探測（見 reports/probe-report.md、reports/probe2-report.md）：
 

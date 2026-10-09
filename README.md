@@ -26,8 +26,13 @@
 - **臺灣證券交易所 OpenAPI** — <https://openapi.twse.com.tw/>
 - **證券櫃檯買賣中心 OpenAPI** — <https://www.tpex.org.tw/openapi/>
 
-公開資訊觀測站（MOPS）的網頁在 `robots.txt` 中禁止爬取，本專案不使用，
-所有資料一律走官方發布的 OpenAPI 端點。
+月營收另讀取 MOPS 官方提供的月份 CSV：
+`https://mopsov.twse.com.tw/nas/t21/{sii|otc|rotc}/t21sc03_{民國年}_{月}.csv`。
+每次抓最近兩期，按公司比較月份及出表日期，合併 OpenAPI 與前次成功資料；
+OpenAPI 整批月報可能落後於當期申報，不能只以請求成功判定已更新。
+尚未公告、缺列或來源失敗時保留可用舊期，來源狀態與月份分布寫入 `meta.json`，
+每筆營收附來源及出表日期（不是公司申報時間）。畫面顯示各股營收月份。
+不逐家公司爬取查詢頁；CSV 可能在月初尚未產生，並不保證即時。
 
 ## 運作方式
 
