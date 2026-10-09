@@ -1,6 +1,6 @@
 {
  "asOf": "2026-10-08",
- "updatedAt": "2026-10-09T20:05:46",
+ "updatedAt": "2026-10-09T22:19:25",
  "counts": {
   "listed": 1088,
   "otc": 892,
@@ -14,12 +14,12 @@
   "listed_revenue_details": {
    "targetMonth": "2026-09",
    "months": {
-    "2026-08": 234,
-    "2026-09": 853
+    "2026-08": 233,
+    "2026-09": 854
    },
-   "currentMonthCount": 853,
-   "olderMonthCount": 234,
-   "checkedAt": "2026-10-09T20:03:48+08:00",
+   "currentMonthCount": 854,
+   "olderMonthCount": 233,
+   "checkedAt": "2026-10-09T22:18:41+08:00",
    "sources": [
     {
      "url": "https://openapi.twse.com.tw/v1/opendata/t187ap05_L",
@@ -33,7 +33,7 @@
     },
     {
      "url": "https://mopsov.twse.com.tw/nas/t21/sii/t21sc03_115_9.csv",
-     "rows": 853,
+     "rows": 854,
      "status": "ok"
     }
    ]
@@ -42,16 +42,16 @@
   "otc_quotes": 12221,
   "otc_profile": 893,
   "otc_pe": 885,
-  "otc_revenue": 892,
+  "otc_revenue": 894,
   "otc_revenue_details": {
    "targetMonth": "2026-09",
    "months": {
-    "2026-08": 146,
-    "2026-09": 746
+    "2026-08": 142,
+    "2026-09": 752
    },
-   "currentMonthCount": 746,
-   "olderMonthCount": 146,
-   "checkedAt": "2026-10-09T20:05:20+08:00",
+   "currentMonthCount": 752,
+   "olderMonthCount": 142,
+   "checkedAt": "2026-10-09T22:19:14+08:00",
    "sources": [
     {
      "url": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O",
@@ -60,15 +60,13 @@
     },
     {
      "url": "https://mopsov.twse.com.tw/nas/t21/otc/t21sc03_115_8.csv",
-     "rows": 0,
-     "status": "unavailable",
-     "error": "https://mopsov.twse.com.tw/nas/t21/otc/t21sc03_115_8.csv: ('Connection aborted.', ConnectionResetError(104, 'Connection reset by peer'))"
+     "rows": 893,
+     "status": "ok"
     },
     {
      "url": "https://mopsov.twse.com.tw/nas/t21/otc/t21sc03_115_9.csv",
-     "rows": 0,
-     "status": "unavailable",
-     "error": "https://mopsov.twse.com.tw/nas/t21/otc/t21sc03_115_9.csv: ('Connection aborted.', ConnectionResetError(104, 'Connection reset by peer'))"
+     "rows": 752,
+     "status": "ok"
     }
    ]
   },
@@ -79,12 +77,12 @@
   "esb_revenue_details": {
    "targetMonth": "2026-09",
    "months": {
-    "2026-08": 59,
-    "2026-09": 307
+    "2026-08": 58,
+    "2026-09": 308
    },
-   "currentMonthCount": 307,
-   "olderMonthCount": 59,
-   "checkedAt": "2026-10-09T20:05:46+08:00",
+   "currentMonthCount": 308,
+   "olderMonthCount": 58,
+   "checkedAt": "2026-10-09T22:19:25+08:00",
    "sources": [
     {
      "url": "https://www.tpex.org.tw/openapi/v1/t187ap05_R",
@@ -98,7 +96,7 @@
     },
     {
      "url": "https://mopsov.twse.com.tw/nas/t21/rotc/t21sc03_115_9.csv",
-     "rows": 307,
+     "rows": 308,
      "status": "ok"
     }
    ]
