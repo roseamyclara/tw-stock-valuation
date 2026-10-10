@@ -264,7 +264,7 @@
     series.forEach((s) => {
       const pts = labels.map((label, i) => {
         const point = s.points.find(p => p[0] === label);
-        return point && point[1] != null ? [X(i), Y(point[1])] : null;
+        return point && point[1] != null && !point[2] ? [X(i), Y(point[1])] : null;
       });
       let connected = false;
       const path = pts.map(point => {
@@ -274,6 +274,21 @@
         return `${command}${point[0].toFixed(1)},${point[1].toFixed(1)}`;
       }).join(" ");
       const validPoints = pts.filter(Boolean);
+      // 負 EPS 只在該月份的範圍畫水平虛線，單一月份也能看見。
+      // 正常折線在負 EPS 期間中斷，不跨過該期連成實線。
+      s.points.forEach((point) => {
+        if (!point[2]) return;
+        const i = labels.indexOf(point[0]), x = X(i), y = Y(0);
+        const monthIndex = (ym) => Number(ym.slice(0, 4)) * 12 + Number(ym.slice(5, 7));
+        const adjacentNegative = (j) => s.points.some(p => p[0] === labels[j] && p[2])
+          && Math.abs(monthIndex(labels[j]) - monthIndex(point[0])) === 1;
+        const half = labels.length > 1 ? (W - M.l - M.r) / (labels.length - 1) / 2 : 10;
+        const left = adjacentNegative(i - 1) ? half : Math.min(10, half);
+        const right = adjacentNegative(i + 1) ? half : Math.min(10, half);
+        svg.appendChild(mk("path", { class: "line", stroke: s.color,
+          "stroke-dasharray": "5 4",
+          d: `M${Math.max(M.l, x - left)},${y} L${Math.min(W - M.r, x + right)},${y}` }));
+      });
       if (!validPoints.length) return;
       svg.appendChild(mk("path", {class: "line", stroke: s.color, d: path}));
       validPoints.forEach(([cx, cy]) => svg.appendChild(mk("circle", {
@@ -309,7 +324,7 @@
         const p = s.points.find((q) => q[0] === labels[idx]);
         if (!p || p[1] == null) return;
         dots.appendChild(mk("circle", { class: "pt", cx: x, cy: Y(p[1]), r: 4.5, fill: s.color }));
-        rows.push(`<div class="tt-r"><span><span class="swatch" style="display:inline-block;background:${s.color}"></span> ${s.name}</span><span>${fmt(p[1])}${opts.unit || ""}</span></div>`);
+        rows.push(`<div class="tt-r"><span><span class="swatch" style="display:inline-block;background:${s.color}"></span> ${s.name}</span><span>${p[2] ? "該期間本益比為負，無資料" : `${fmt(p[1])}${opts.unit || ""}`}</span></div>`);
       });
       if (!rows.length) return hide();
       const extra = opts.tooltipNote ? `<div class="tt-h">${esc(opts.tooltipNote(labels[idx]) || "")}</div>` : "";
@@ -325,6 +340,14 @@
     hit.addEventListener("mouseleave", hide);
     svg.addEventListener("touchmove", (e) => { if (e.touches[0]) move(e.touches[0]); }, { passive: true });
     svg.addEventListener("touchend", hide);
+  }
+
+  // 第六欄保留資料來源確認的原因；不可由 null、最新 EPS 或單季 EPS 推測歷史。
+  function peHistoryPoints(history) {
+    return history.map(([ym, pe, , , , reason]) => {
+      const negative = !(pe > 0) && (reason === "negative_eps" || (Number.isFinite(pe) && pe < 0));
+      return [ym, negative ? 0 : pe, negative];
+    }).filter((point) => point[1] != null);
   }
 
   // ---------------------------------------------------------------- 迷你走勢線
@@ -1058,7 +1081,7 @@
       });
     });
 
-    const hist = (d.hist || []).map(([ym, pe]) => [ym, pe]).filter((p) => p[1] != null);
+    const hist = peHistoryPoints(d.hist || []);
     lineChart(ov.querySelector("#stockChart"), ov.querySelector("#stockTip"),
       hist.length ? [{ key: "pe", name: "本益比", color: SERIES[base.m], points: hist }] : [],
       { unit: "倍", height: MOBILE.matches ? 200 : 240 });
