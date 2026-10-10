@@ -76,6 +76,15 @@ def norm_profile_from_capital(rows: list[dict], code_key: str, name_key: str, ca
 
 # ---------------------------------------------------------------- 估值
 
+def pe_fields(raw: Any) -> dict:
+    """保留來源明確提供的負本益比原因；空白、N/A、零不能當作負 EPS。"""
+    value = num(raw)
+    fields = {"pe": pos(raw)}
+    if value is not None and value < 0:
+        fields["peReason"] = "negative_eps"
+    return fields
+
+
 def norm_daily_listed(rows: list[dict]) -> dict[str, dict]:
     """上市 BWIBBU_d：一支端點同時給名稱、收盤價、本益比、淨值比、殖利率。"""
     out = {}
@@ -86,7 +95,7 @@ def norm_daily_listed(rows: list[dict]) -> dict[str, dict]:
         out[code] = {
             "name": str(_first(r, "證券名稱", "Name") or "").strip(),
             "price": num(_first(r, "收盤價")),
-            "pe": pos(_first(r, "本益比")),
+            **pe_fields(_first(r, "本益比")),
             "pb": pos(_first(r, "股價淨值比")),
             "dy": num(_first(r, "殖利率(%)")),
         }
@@ -102,7 +111,7 @@ def norm_daily_otc_pe(rows: list[dict]) -> dict[str, dict]:
             continue
         out[code] = {
             "name": str(_first(r, "公司名稱", "名稱") or "").strip(),
-            "pe": pos(_first(r, "本益比", "PriceEarningRatio")),
+            **pe_fields(_first(r, "本益比", "PriceEarningRatio")),
             "pb": pos(_first(r, "股價淨值比", "PriceBookRatio")),
             "dy": num(_first(r, "殖利率(%)", "YieldRatio")),
         }
@@ -128,7 +137,7 @@ def norm_valuation_otc(rows: list[dict]) -> dict[str, dict]:
     """上櫃：tpex_mainboard_peratio_analysis"""
     return {
         str(r.get("SecuritiesCompanyCode", "")).strip(): {
-            "pe": pos(r.get("PriceEarningRatio")),
+            **pe_fields(r.get("PriceEarningRatio")),
             "pb": pos(r.get("PriceBookRatio")),
             "dy": num(r.get("YieldRatio")),
         }

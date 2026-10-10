@@ -4,6 +4,7 @@
 十年約 120 個月 × 3 支端點，對官方站台負擔很小。
 
 輸出：docs/data/history/<西元年>.json
+    # 可選第五欄為 peReason；只有明確負值才寫 negative_eps。
     {"2026-08": {"d": "2026-08-28",
                  "s": {"2330": [pe, pb, dy, price]}}}
 """
@@ -46,6 +47,11 @@ def month_snapshot(y: int, m: int) -> dict | None:
         for code, v in otc_pe.items():
             if len(code) == 4 and code.isdigit():
                 stocks[code] = [rnd(v.get("pe")), rnd(v.get("pb")), rnd(v.get("dy")), None]
+
+        for code, values in stocks.items():
+            source = otc_pe.get(code) or listed.get(code) or {}
+            if source.get("peReason"):
+                values.append(source["peReason"])
 
         log(f"  {y}-{m:02d} ({d})：上市 {len(listed)}、上櫃 {len(otc_pe)}，合計 {len(stocks)} 檔")
         return {"d": d.isoformat(), "s": stocks}

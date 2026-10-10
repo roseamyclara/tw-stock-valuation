@@ -171,6 +171,7 @@ def merge(
             "p": rnd(px),
             "cap": round(cap) if cap else None,
             "pe": rnd(v.get("pe")),
+            **({"peReason": v["peReason"]} if v.get("peReason") else {}),
             "pb": rnd(v.get("pb")),
             "dy": rnd(v.get("dy")),
             "_shares": shares,
@@ -313,9 +314,11 @@ def update_month_history(rows: list[dict], day) -> None:
     stocks = {}
     for s in rows:
         pe, pb, dy, p = s.get("pe"), s.get("pb"), s.get("dy"), s.get("p")
-        if pe is None and pb is None and dy is None:
+        if pe is None and pb is None and dy is None and not s.get("peReason"):
             continue
         stocks[s["c"]] = [pe, pb, dy, p]
+        if s.get("peReason"):
+            stocks[s["c"]].append(s["peReason"])
     if not stocks:
         return
 
