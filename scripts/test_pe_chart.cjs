@@ -56,3 +56,21 @@ test('unconfirmed gaps keep original filtering and have no dashed path', () => {
   assert.match(paths[0].attrs.d, /L/);
   assert.equal(render([['2020-01',null]]).paths.length, 0);
 });
+
+test('negative months separated by unknown or absent months never get a continuous dashed line', () => {
+  for (const hist of [
+    [['2020-01', -1], ['2020-02', null], ['2020-03', -1]],
+    [['2020-01', -1], ['2020-03', -1]],
+  ]) {
+    const {paths} = render(hist);
+    assert.equal(paths.length, 2);
+    const endX = path => Number(path.attrs.d.match(/ L([0-9.]+),/)[1]);
+    const startX = path => Number(path.attrs.d.match(/^M([0-9.]+),/)[1]);
+    assert.ok(endX(paths[0]) < startX(paths[1]));
+  }
+});
+test('confirmed consecutive negative months form a zero baseline across year boundaries', () => {
+  const {paths} = render([['2020-12', -1], ['2021-01', -1]]);
+  assert.equal(paths.length, 2);
+  assert.equal(paths[0].attrs.d.split(' L')[1], paths[1].attrs.d.slice(1).split(' L')[0]);
+});

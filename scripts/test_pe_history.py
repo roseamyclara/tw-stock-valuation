@@ -6,6 +6,8 @@ from unittest.mock import patch
 
 import markets
 import build_snapshot
+import rebuild_history
+from util import write_json
 from util import read_json
 
 
@@ -33,6 +35,28 @@ class NegativePeTests(unittest.TestCase):
             self.assertEqual(stocks['1234'], [None, None, None, None, 'negative_eps'])
             self.assertEqual(stocks['5678'], [12, 1, None, None])
             self.assertEqual(stocks['9012'], [None, 1, None, None])
+
+    def test_rebuild_preserves_reason_without_polluting_market_pe(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rows = [{'c': '1234', 'm': 'listed'}, {'c': '5678', 'm': 'listed'}]
+            write_json(root / 'latest.json', rows)
+            write_json(root / 'history/2026.json', {'2026-10': {
+                'd': '2026-10-08', 's': {
+                    '1234': [None, 1, None, 10, 'negative_eps'],
+                    '5678': [12, 1, None, 10],
+                }}})
+            with patch.object(rebuild_history, 'DATA_DIR', root), \
+                 patch.object(rebuild_history, 'HIST_DIR', root / 'history'), \
+                 patch.object(rebuild_history, 'STOCK_DIR', root / 'stock'), \
+                 patch.object(rebuild_history, 'PS_HISTORY', root / 'ps.json'), \
+                 patch.object(rebuild_history, 'load_reconstructed', return_value={}):
+                rebuild_history.main()
+            stock = read_json(root / 'stock/1234.json')
+            self.assertEqual(stock['hist'], [['2026-10', None, 1, None, 10, 'negative_eps']])
+            market = read_json(root / 'market_history.json')['monthly']['2026-10']['m']['listed']
+            self.assertEqual(market['pe'], 12)
+            self.assertEqual(market['n'], 1)
 
 
 if __name__ == '__main__':
