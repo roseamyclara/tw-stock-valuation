@@ -16,3 +16,20 @@
 
 - `node --test scripts/test_pe_chart.cjs`
 - 在 `scripts` 目錄執行 `python -m unittest test_pe_history test_ps_history test_revenue`
+
+## 已逐筆查證的歷史補標
+
+目前補標範圍限友達（2409）2019-08 至 2020-01，共 6 個月。逐筆快照日、四季數字、公告日期與原始來源保存在 [pe_evidence.json](data/pe_evidence.json)。這是人工核對的有限清單，不是全市場覆蓋。
+
+| 月快照日期 | 已公告季度範圍 | 四季 EPS 加總 | 四季歸屬母公司淨利加總（十億元） | 最新公告日 | 下一次財報公告日 |
+| --- | --- | --- | --- | --- | --- |
+| 2019-08-30、2019-09-27 | 2018Q3–2019Q2 | -0.18 | -1.77 | 2019-07-25 | 2019-10-30 |
+| 2019-10-31、2019-11-29、2019-12-31、2020-01-31 | 2018Q4–2019Q3 | -1.04 | -10.08 | 2019-10-30 | 2020-02-06 |
+
+以上加總由公司當時發布的季度數字計算，只用來核對負值方向，不當作交易所精確 EPS 或重算 P/E。四季 EPS 及歸屬母公司淨利須同時為負，且負值幅度超過四筆公告數字的合計四捨五入誤差（0.02），才接受標記。
+
+來源為友達官方公告：[2018Q3](https://auo.com/ja-JP/News_Archive/detail/news_IR_20181031)、[2018Q4](https://www.auo.com/en-global/New_Archive/detail/news_IR_20190129)、[2019Q1](https://www.auo.com/en-global/New_Archive/detail/news_IR_20190425)、[2019Q2](https://auo.com/en-global/New_Archive/detail/news_ir_20190725)、[2019Q3](https://www.auo.com/en-global/New_Archive/detail/news_IR_20191030)、[2019Q4 公告日期](https://www.auo.com/en-global/New_Archive/detail/news_IR_20200206)。
+
+套用規則：僅接受清單中的精確快照日期；四季必須連續、均在快照日前公布，且快照早於下一份財報公告日；同日因缺少公告時間不採用。來源已有正 P/E、零 P/E、既有原因標記，或整筆估值欄位全缺漏時，均保留原資料。2019-07 雖已公布虧損季度，但月快照仍有正常 P/E，因此保留 37.59，不覆寫。
+
+每日重建時從原始月資料重新核對證據清單，只在個股歷史附加 `negative_eps`，不修改原始月快照、P/E 數值或市場統計。其他股票及未查證月份維持原處理。新增證據的回歸測試為 `python -m unittest test_pe_evidence`（於 scripts 目錄執行）。

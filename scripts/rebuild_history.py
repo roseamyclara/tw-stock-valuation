@@ -9,6 +9,8 @@
 """
 from __future__ import annotations
 
+from pe_evidence import with_pe_evidence
+
 import json
 from collections import defaultdict
 from statistics import median
@@ -102,10 +104,11 @@ def main() -> None:
     STOCK_DIR.mkdir(parents=True, exist_ok=True)
 
     ps_months = merge_history(load_reconstructed(), read_json(PS_HISTORY, {}) or {})
+    pe_evidence = read_json(DATA_DIR / "pe_evidence.json", {}) or {}
     per_stock: dict[str, list] = defaultdict(list)
     for ym, snap in months.items():
         for code, vals in snap.get("s", {}).items():
-            per_stock[code].append([ym] + list(vals))
+            per_stock[code].append([ym] + with_pe_evidence(vals, code, snap.get("d"), pe_evidence))
 
     written = 0
     for code, s in meta.items():
