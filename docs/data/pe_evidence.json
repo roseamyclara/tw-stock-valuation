@@ -1,0 +1,86 @@
+{
+  "2409": [
+    {
+      "snapshotDates": [
+        "2019-08-30",
+        "2019-09-27"
+      ],
+      "quarters": [
+        {
+          "period": "2018Q3",
+          "announcedOn": "2018-10-31",
+          "eps": 0.45,
+          "netIncomeBillionTwd": 4.32,
+          "source": "https://auo.com/ja-JP/News_Archive/detail/news_IR_20181031"
+        },
+        {
+          "period": "2018Q4",
+          "announcedOn": "2019-01-29",
+          "eps": 0.03,
+          "netIncomeBillionTwd": 0.28,
+          "source": "https://www.auo.com/en-global/New_Archive/detail/news_IR_20190129"
+        },
+        {
+          "period": "2019Q1",
+          "announcedOn": "2019-04-25",
+          "eps": -0.38,
+          "netIncomeBillionTwd": -3.69,
+          "source": "https://www.auo.com/en-global/New_Archive/detail/news_IR_20190425"
+        },
+        {
+          "period": "2019Q2",
+          "announcedOn": "2019-07-25",
+          "eps": -0.28,
+          "netIncomeBillionTwd": -2.68,
+          "source": "https://auo.com/en-global/New_Archive/detail/news_ir_20190725"
+        }
+      ],
+      "nextAnnouncement": {
+        "date": "2019-10-30",
+        "source": "https://www.auo.com/en-global/New_Archive/detail/news_IR_20191030"
+      }
+    },
+    {
+      "snapshotDates": [
+        "2019-10-31",
+        "2019-11-29",
+        "2019-12-31",
+        "2020-01-31"
+      ],
+      "quarters": [
+        {
+          "period": "2018Q4",
+          "announcedOn": "2019-01-29",
+          "eps": 0.03,
+          "netIncomeBillionTwd": 0.28,
+          "source": "https://www.auo.com/en-global/New_Archive/detail/news_IR_20190129"
+        },
+        {
+          "period": "2019Q1",
+          "announcedOn": "2019-04-25",
+          "eps": -0.38,
+          "netIncomeBillionTwd": -3.69,
+          "source": "https://www.auo.com/en-global/New_Archive/detail/news_IR_20190425"
+        },
+        {
+          "period": "2019Q2",
+          "announcedOn": "2019-07-25",
+          "eps": -0.28,
+          "netIncomeBillionTwd": -2.68,
+          "source": "https://auo.com/en-global/New_Archive/detail/news_ir_20190725"
+        },
+        {
+          "period": "2019Q3",
+          "announcedOn": "2019-10-30",
+          "eps": -0.41,
+          "netIncomeBillionTwd": -3.99,
+          "source": "https://www.auo.com/en-global/New_Archive/detail/news_IR_20191030"
+        }
+      ],
+      "nextAnnouncement": {
+        "date": "2020-02-06",
+        "source": "https://www.auo.com/en-global/New_Archive/detail/news_IR_20200206"
+      }
+    }
+  ]
+}
