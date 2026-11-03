@@ -66,5 +66,12 @@ jobs:
             echo "附註資料無變化"
           else
             git commit -m "漸進補回財報附註 $(TZ=Asia/Taipei date +%Y-%m-%d)"
-            git push
+            # 本流程可能跑很久，期間其他 workflow 會先推上 main，推送前先同步再重試
+            for i in 1 2 3 4 5; do
+              git pull --rebase -X theirs origin main && git push && exit 0
+              git rebase --abort 2>/dev/null || true
+              echo "push 失敗，第 $i 次重試"
+              sleep $((i * 10))
+            done
+            exit 1
           fi
