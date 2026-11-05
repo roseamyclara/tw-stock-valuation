@@ -1,6 +1,6 @@
 {
- "asOf": "2026-11-04",
- "updatedAt": "2026-11-05T02:44:11",
+ "asOf": "2026-11-05",
+ "updatedAt": "2026-11-05T21:28:45",
  "counts": {
   "listed": 1088,
   "otc": 892,
@@ -8,18 +8,18 @@
  },
  "total": 2361,
  "sources": {
-  "listed_daily": 1088,
+  "listed_daily": 1087,
   "listed_profile": 1099,
   "listed_revenue": 1091,
   "listed_revenue_details": {
    "targetMonth": "2026-10",
    "months": {
-    "2026-09": 1039,
-    "2026-10": 52
+    "2026-09": 931,
+    "2026-10": 160
    },
-   "currentMonthCount": 52,
-   "olderMonthCount": 1039,
-   "checkedAt": "2026-11-05T02:43:36+08:00",
+   "currentMonthCount": 160,
+   "olderMonthCount": 931,
+   "checkedAt": "2026-11-05T21:26:57+08:00",
    "sources": [
     {
      "url": "https://openapi.twse.com.tw/v1/opendata/t187ap05_L",
@@ -33,26 +33,26 @@
     },
     {
      "url": "https://mopsov.twse.com.tw/nas/t21/sii/t21sc03_115_10.csv",
-     "rows": 52,
+     "rows": 160,
      "status": "ok"
     }
    ]
   },
-  "listed_income": 79,
-  "otc_quotes": 13626,
+  "listed_income": 112,
+  "otc_quotes": 13679,
   "otc_profile": 897,
-  "otc_pe": 892,
+  "otc_pe": 891,
   "otc_revenue": 899,
   "otc_revenue_details": {
    "targetMonth": "2026-10",
    "months": {
     "2026-08": 1,
-    "2026-09": 846,
-    "2026-10": 52
+    "2026-09": 771,
+    "2026-10": 127
    },
-   "currentMonthCount": 52,
-   "olderMonthCount": 847,
-   "checkedAt": "2026-11-05T02:44:02+08:00",
+   "currentMonthCount": 127,
+   "olderMonthCount": 772,
+   "checkedAt": "2026-11-05T21:28:20+08:00",
    "sources": [
     {
      "url": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O",
@@ -66,25 +66,25 @@
     },
     {
      "url": "https://mopsov.twse.com.tw/nas/t21/otc/t21sc03_115_10.csv",
-     "rows": 52,
+     "rows": 127,
      "status": "ok"
     }
    ]
   },
-  "otc_income": 64,
+  "otc_income": 93,
   "esb_quotes": 367,
   "esb_profile": 367,
-  "esb_revenue": 373,
+  "esb_revenue": 374,
   "esb_revenue_details": {
    "targetMonth": "2026-10",
    "months": {
     "2026-08": 5,
-    "2026-09": 346,
-    "2026-10": 22
+    "2026-09": 311,
+    "2026-10": 58
    },
-   "currentMonthCount": 22,
-   "olderMonthCount": 351,
-   "checkedAt": "2026-11-05T02:44:11+08:00",
+   "currentMonthCount": 58,
+   "olderMonthCount": 316,
+   "checkedAt": "2026-11-05T21:28:45+08:00",
    "sources": [
     {
      "url": "https://www.tpex.org.tw/openapi/v1/t187ap05_R",
@@ -98,14 +98,14 @@
     },
     {
      "url": "https://mopsov.twse.com.tw/nas/t21/rotc/t21sc03_115_10.csv",
-     "rows": 22,
+     "rows": 58,
      "status": "ok"
     }
    ]
   }
  },
- "withPE": 1539,
- "withPS": 2308,
- "withRevenue": 2350,
- "withFinancials": 135
+ "withPE": 1541,
+ "withPS": 2305,
+ "withRevenue": 2351,
+ "withFinancials": 197
 }
