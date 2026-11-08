@@ -95,5 +95,15 @@ class OperatingLeadParserTests(unittest.TestCase):
         self.assertEqual(result["2330"]["2026Q2"], 120_000)
 
 
+class FilingPeriodTests(unittest.TestCase):
+    def test_in_progress_quarter_is_fetched_for_early_filers(self):
+        from datetime import date
+        from build_operating_leads import in_progress_period
+        self.assertEqual(in_progress_period(date(2026, 11, 9)), (2026, 3))
+        self.assertEqual(in_progress_period(date(2027, 2, 1)), (2026, 4))
+        self.assertIsNone(in_progress_period(date(2026, 11, 20)))
+        self.assertIsNone(in_progress_period(date(2026, 6, 1)))
+
+
 if __name__ == "__main__":
     unittest.main()

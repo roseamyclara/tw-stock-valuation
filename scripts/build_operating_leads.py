@@ -147,6 +147,21 @@ def latest_completed_period(today: date) -> tuple[int, int]:
     return today.year, 3
 
 
+def in_progress_period(today: date) -> tuple[int, int] | None:
+    """The quarter after the last deadline-passed one, once it has ended.
+
+    Early filers publish well before the statutory deadline (e.g. Q3 reports
+    from late October while the deadline is 11/14). Requesting this quarter
+    lets their balance-sheet items update together with the income statement;
+    companies that have not filed yet are simply absent from the response.
+    """
+    year, quarter = latest_completed_period(today)
+    year, quarter = (year + 1, 1) if quarter == 4 else (year, quarter + 1)
+    end_month = quarter * 3
+    quarter_end = date(year, end_month, 31 if end_month in (3, 12) else 30)
+    return (year, quarter) if today > quarter_end else None
+
+
 def periods_for(years: int, latest: tuple[int, int]) -> list[str]:
     last_year, last_quarter = latest
     first_year = last_year - max(1, years) + 1
@@ -901,10 +916,14 @@ def main() -> int:
     http = Http()
     metric_codes = discover_metric_codes(http)
 
-    latest_period = latest_completed_period(now_taipei().date())
+    today = now_taipei().date()
+    latest_period = latest_completed_period(today)
     all_periods = periods_for(max(1, args.years), latest_period)
+    early = in_progress_period(today)
+    if early:
+        all_periods.append(period_key(*early))
     balance_sheet_periods = (
-        [period_key(*latest_period)]
+        [period_key(*latest_period)] + ([period_key(*early)] if early else [])
         if args.latest_only
         else all_periods
     )

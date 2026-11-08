@@ -6,6 +6,7 @@
     docs/data/market.json   三市場加總的估值（各年度歷史由 rebuild_history.py 併入）
 """
 from __future__ import annotations
+import re
 
 import sys
 from statistics import median
@@ -244,6 +245,21 @@ def profit_growth(cur: dict, prev: dict | None) -> dict | None:
     return out
 
 
+def latest_saved_income(hist: dict) -> dict:
+    """fundamentals.json 中最新一季的累計損益表（鍵為民國年 YYYQn）。"""
+    best = None
+    for key, rec in (hist.get("income") or {}).items():
+        m = re.fullmatch(r"(\d+)Q([1-4])", key)
+        if m and rec:
+            yq = (int(m[1]), int(m[2]))
+            if best is None or yq > best[0]:
+                best = (yq, rec)
+    if not best:
+        return {}
+    (year, quarter), rec = best
+    return {**rec, "year": year, "quarter": quarter}
+
+
 def finalise(stocks: dict[str, dict]) -> list[dict]:
     """算出 P/S 與各項成長率，並清掉內部欄位。"""
     fundamentals = read_json(DATA_DIR / "fundamentals.json", {}) or {}
@@ -279,6 +295,10 @@ def finalise(stocks: dict[str, dict]) -> list[dict]:
                 "cum_yoy": rnd(r.get("cum_yoy")),
             }
 
+        # 官方 OpenAPI 一進入新財報季就只列已申報的公司；尚未申報者沿用
+        # 歷史中最新一季，避免獲利欄位在申報期間整片變空白。
+        if not (i and i.get("year") and i.get("quarter")):
+            i = latest_saved_income(hist)
         # 去年同期的損益表（來自歷史累積）
         prev = None
         if i and i.get("year") and i.get("quarter"):
