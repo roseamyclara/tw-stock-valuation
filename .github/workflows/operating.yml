@@ -2,7 +2,7 @@ name: 營運先行指標更新
 
 on:
   schedule:
-    - cron: "20 3 * * 0"
+    - cron: "20 3 * * *"
       timezone: "Asia/Taipei"
 
   # main 合併後持續自動更新；功能分支在開發期間也必須真正產生資料，
