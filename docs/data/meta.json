@@ -1,6 +1,6 @@
 {
  "asOf": "2026-11-09",
- "updatedAt": "2026-11-10T01:24:37",
+ "updatedAt": "2026-11-10T05:31:36",
  "counts": {
   "listed": 1088,
   "otc": 892,
@@ -19,7 +19,7 @@
    },
    "currentMonthCount": 650,
    "olderMonthCount": 441,
-   "checkedAt": "2026-11-10T01:23:33+08:00",
+   "checkedAt": "2026-11-10T05:29:47+08:00",
    "sources": [
     {
      "url": "https://openapi.twse.com.tw/v1/opendata/t187ap05_L",
@@ -42,17 +42,17 @@
   "otc_quotes": 13674,
   "otc_profile": 897,
   "otc_pe": 894,
-  "otc_revenue": 899,
+  "otc_revenue": 896,
   "otc_revenue_details": {
    "targetMonth": "2026-10",
    "months": {
     "2026-08": 1,
-    "2026-09": 334,
+    "2026-09": 331,
     "2026-10": 564
    },
    "currentMonthCount": 564,
-   "olderMonthCount": 335,
-   "checkedAt": "2026-11-10T01:24:25+08:00",
+   "olderMonthCount": 332,
+   "checkedAt": "2026-11-10T05:31:22+08:00",
    "sources": [
     {
      "url": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O",
@@ -61,8 +61,9 @@
     },
     {
      "url": "https://mopsov.twse.com.tw/nas/t21/otc/t21sc03_115_9.csv",
-     "rows": 897,
-     "status": "ok"
+     "rows": 0,
+     "status": "unavailable",
+     "error": "https://mopsov.twse.com.tw/nas/t21/otc/t21sc03_115_9.csv: HTTPSConnectionPool(host='mopsov.twse.com.tw', port=443): Max retries exceeded with url: /nas/t21/otc/t21sc03_115_9.csv (Caused by ConnectTimeoutError(<HTTPSConnection(host='mopsov.twse.com.tw', port=443) at 0x72960fd97500>, 'Connection to mopsov.twse.com.tw timed out. (connect timeout=25)'))"
     },
     {
      "url": "https://mopsov.twse.com.tw/nas/t21/otc/t21sc03_115_10.csv",
@@ -84,7 +85,7 @@
    },
    "currentMonthCount": 212,
    "olderMonthCount": 165,
-   "checkedAt": "2026-11-10T01:24:37+08:00",
+   "checkedAt": "2026-11-10T05:31:36+08:00",
    "sources": [
     {
      "url": "https://www.tpex.org.tw/openapi/v1/t187ap05_R",
