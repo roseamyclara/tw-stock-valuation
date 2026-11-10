@@ -1,6 +1,6 @@
 {
  "asOf": "2026-11-10",
- "updatedAt": "2026-11-10T21:44:30",
+ "updatedAt": "2026-11-10T23:34:08",
  "counts": {
   "listed": 1088,
   "otc": 892,
@@ -19,7 +19,7 @@
    },
    "currentMonthCount": 1076,
    "olderMonthCount": 15,
-   "checkedAt": "2026-11-10T21:43:03+08:00",
+   "checkedAt": "2026-11-10T23:32:10+08:00",
    "sources": [
     {
      "url": "https://openapi.twse.com.tw/v1/opendata/t187ap05_L",
@@ -52,7 +52,7 @@
    },
    "currentMonthCount": 897,
    "olderMonthCount": 2,
-   "checkedAt": "2026-11-10T21:44:19+08:00",
+   "checkedAt": "2026-11-10T23:33:52+08:00",
    "sources": [
     {
      "url": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O",
@@ -61,8 +61,9 @@
     },
     {
      "url": "https://mopsov.twse.com.tw/nas/t21/otc/t21sc03_115_9.csv",
-     "rows": 897,
-     "status": "ok"
+     "rows": 0,
+     "status": "unavailable",
+     "error": "https://mopsov.twse.com.tw/nas/t21/otc/t21sc03_115_9.csv: HTTPSConnectionPool(host='mopsov.twse.com.tw', port=443): Max retries exceeded with url: /nas/t21/otc/t21sc03_115_9.csv (Caused by NewConnectionError(\"HTTPSConnection(host='mopsov.twse.com.tw', port=443): Failed to establish a new connection: [Errno 111] Connection refused\"))"
     },
     {
      "url": "https://mopsov.twse.com.tw/nas/t21/otc/t21sc03_115_10.csv",
@@ -84,7 +85,7 @@
    },
    "currentMonthCount": 368,
    "olderMonthCount": 15,
-   "checkedAt": "2026-11-10T21:44:30+08:00",
+   "checkedAt": "2026-11-10T23:34:08+08:00",
    "sources": [
     {
      "url": "https://www.tpex.org.tw/openapi/v1/t187ap05_R",
