@@ -681,6 +681,16 @@ svg.chart circle.pt { stroke: var(--surface-1); stroke-width: 2.5; }
   color: var(--text-secondary);
   white-space: nowrap;
 }
+/* 搜尋字只出現在法說會重點時，名稱旁的註記 */
+.cap-hit {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  white-space: nowrap;
+}
 
 /* ============================================================ 篩選列 */
 /* 個股指標的標題＋篩選列釘在頂欄下方，捲動個股清單時一直看得到 */

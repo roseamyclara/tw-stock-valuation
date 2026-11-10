@@ -43,6 +43,19 @@
 
   const tagsOf = (code) => state.tags[code] || [];
 
+  // 搜尋也比對個股面板「法說會重點」的文字：索引檔 data/research/captain_search.json（{代號: 文字}，
+  // 由 scripts/import_research.py 產生），第一次輸入搜尋字時才載入；載入前只比對代號、名稱、業務標籤。
+  // capHits：本次搜尋只靠法說會重點命中的代號，名稱旁加註「法說會」。
+  let capIndex = null, capIndexP = null, capHits = new Set();
+  function ensureCapIndex() {
+    return capIndexP || (capIndexP = getJSON("data/research/captain_search.json", {}).then((v) => {
+      capIndex = {};
+      for (const [c, t] of Object.entries(v || {})) capIndex[c] = String(t).toLowerCase();
+      if (state.q.trim()) applyFilters();
+    }));
+  }
+  const capHitMark = (c) => (capHits.has(c) ? ` <span class="cap-hit" title="搜尋字出現在法說會重點">法說會</span>` : "");
+
   const RETURN_PERIODS = { d1: "1日", w1: "1週", m1: "30天", m3: "3個月", ytd: "今年迄今", y1: "1年", y3: "3年", y5: "5年" };
   const performanceOf = (code) => state.performance.stocks[code] || {};
   const operatingOf = (code) => state.operating.stocks[code] || {};
@@ -284,7 +297,7 @@
 
   const COLS = [
     { k: "c", t: "代號", cls: "code", get: (r) => r.c },
-    { k: "n", t: "名稱", cls: "name-cell", get: (r) => `${esc(r.n)} <span class="mkt">${LABEL[r.m]}</span>` },
+    { k: "n", t: "名稱", cls: "name-cell", get: (r) => `${esc(r.n)} <span class="mkt">${LABEL[r.m]}</span>${capHitMark(r.c)}` },
     {
       k: "i", t: "業務標籤", cls: "ind",
       // 有業務標籤就顯示業務標籤；沒有的話退回官方產業別（樣式做區隔，一眼看得出來源不同）
@@ -576,13 +589,19 @@
 
   function applyFilters() {
     const terms = state.q.toLowerCase().split(/\s+/u).filter(Boolean);
+    capHits = new Set();
     let v = state.rows.filter((r) => {
       if (state.filterMarket && r.m !== state.filterMarket) return false;
       if (state.industry && r.i !== state.industry) return false;
       if (state.tag && !tagsOf(r.c).includes(state.tag)) return false;
       // 空白分隔的條件採 OR；市場、產業與標籤篩選仍同時適用。
       if (terms.length && !terms.some(q => r.c.includes(q) || (r.n || "").toLowerCase().includes(q)
-                 || tagsOf(r.c).some((t) => t.toLowerCase().includes(q)))) return false;
+                 || tagsOf(r.c).some((t) => t.toLowerCase().includes(q)))) {
+        // 代號、名稱、業務標籤都沒命中時，再比對法說會重點
+        const cap = capIndex && capIndex[r.c];
+        if (!cap || !terms.some((q) => cap.includes(q))) return false;
+        capHits.add(r.c);
+      }
       return true;
     });
     // 依序比對每個排序條件，先分出勝負的那個決定順序
@@ -615,7 +634,7 @@
     return `<div class="scard" data-c="${r.c}" role="button" tabindex="0">
       <div class="scard-top">
         <div class="scard-id">
-          <div class="scard-name"><span class="nm">${esc(r.n)}</span><span class="mkt">${LABEL[r.m]}</span></div>
+          <div class="scard-name"><span class="nm">${esc(r.n)}</span><span class="mkt">${LABEL[r.m]}</span>${capHitMark(r.c)}</div>
           <div class="scard-code">${r.c}</div>
         </div>
         <div class="scard-price">
@@ -1043,7 +1062,11 @@
     draw();
     applyFilters();
 
-    $("q").addEventListener("input", (e) => { state.q = e.target.value; state.shown = 200; applyFilters(); });
+    $("q").addEventListener("input", (e) => {
+      state.q = e.target.value; state.shown = 200;
+      if (state.q.trim()) ensureCapIndex();
+      applyFilters();
+    });
     $("industry").addEventListener("change", (e) => {
       state.industry = e.target.value; state.tag = ""; state.shown = 200; applyFilters();
     });

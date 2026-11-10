@@ -8,6 +8,7 @@
   meta.json              兩份資料的產生時間、來源、欄位說明、備註，以及有資料的代號清單
   captain/<代號>.json     船長單檔
   ryza/<代號>.json        Ryza 單檔
+  captain_search.json    個股指標搜尋欄用的索引：{代號: 法說會重點各欄文字（以換行串接）}，由 captain/ 單檔產生
 
 文字除了去掉第三方法說彙整站的字樣與連結、刪掉提到該站的句子（見 strip_bg）之外原樣保留（含「（推論）」「（自行計算）」與 p14 之類的頁碼）；
 sources 裡指向該站的條目整筆移除；清完變空的字串欄位留空字串，清單裡清完變空的項目移除。
@@ -15,6 +16,7 @@ sources 裡指向該站的條目整筆移除；清完變空的字串欄位留空
 
 用法：python3 scripts/import_research.py [--captain PATH] [--ryza PATH]
       python3 scripts/import_research.py --reclean   # 不讀來源，只對 repo 內現有檔案重跑清理
+      python3 scripts/import_research.py --index-only   # 不改任何單檔，只從 captain/ 重建 captain_search.json
 """
 from __future__ import annotations
 
@@ -197,6 +199,35 @@ def write(path: Path, obj) -> None:
     tmp.replace(path)
 
 
+# 搜尋索引只收面板「法說會重點」區塊顯示的文字；代號、名稱、產業、簡報說明、日期與來源不收
+SEARCH_INDEX = OUT / "captain_search.json"
+SEARCH_SKIP = {"code", "name", "industry", "template", "nodata", "dataDate", "deck", "sources"}
+
+
+def _texts(obj) -> list[str]:
+    if isinstance(obj, str):
+        return [obj] if obj.strip() else []
+    if isinstance(obj, dict):
+        return [t for v in obj.values() for t in _texts(v)]
+    if isinstance(obj, list):
+        return [t for v in obj for t in _texts(v)]
+    return []
+
+
+def write_search_index() -> int:
+    """從 captain/<代號>.json 產生 captain_search.json；無資料（nodata）的代號不收。"""
+    index = {}
+    for f in sorted((OUT / "captain").glob("*.json")):
+        rec = json.loads(f.read_text(encoding="utf-8"))
+        if rec.get("nodata") or rec.get("template") == "nodata":
+            continue
+        text = "\n".join(t for k, v in rec.items() if k not in SEARCH_SKIP for t in _texts(v))
+        if text:
+            index[f.stem] = text
+    write(SEARCH_INDEX, index)
+    return len(index)
+
+
 def split(name: str, records: dict[str, dict]) -> list[str]:
     folder = OUT / name
     folder.mkdir(parents=True, exist_ok=True)
@@ -214,13 +245,18 @@ def main() -> None:
     ap.add_argument("--captain", type=Path, default=SRC / "captain.json")
     ap.add_argument("--ryza", type=Path, default=SRC / "ryza.json")
     ap.add_argument("--reclean", action="store_true", help="只對 docs/data/research 現有檔案重跑清理")
+    ap.add_argument("--index-only", action="store_true", help="只從 captain/ 重建搜尋索引 captain_search.json")
     args = ap.parse_args()
 
+    if args.index_only:
+        print(f"搜尋索引 {write_search_index()} 檔 → {SEARCH_INDEX}")
+        return
+
     if args.reclean:
-        files = sorted(OUT.rglob("*.json"))
+        files = sorted(f for f in OUT.rglob("*.json") if f != SEARCH_INDEX)
         for f in files:
             write(f, clean(json.loads(f.read_text(encoding="utf-8"))))
-        print(f"重新清理 {len(files)} 個檔案 → {OUT}")
+        print(f"重新清理 {len(files)} 個檔案 → {OUT}；搜尋索引 {write_search_index()} 檔")
         return
 
     cap = clean(json.loads(args.captain.read_text(encoding="utf-8")))
@@ -247,6 +283,7 @@ def main() -> None:
     meta["captain"]["nodata"] = sorted(c for c, r in cap_stocks.items() if r.get("nodata"))
     meta["ryza"]["codes"] = ryz_codes
     write(OUT / "meta.json", meta)
+    print(f"搜尋索引 {write_search_index()} 檔 → {SEARCH_INDEX}")
     print(f"captain {len(cap_codes)} 檔（無資料 {len(meta['captain']['nodata'])}）、ryza {len(ryz_codes)} 檔 → {OUT}；"
           f"刪除提到彙整站的敘述 {len(DROPPED)} 處")
 
