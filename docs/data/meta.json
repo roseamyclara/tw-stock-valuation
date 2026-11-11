@@ -1,12 +1,12 @@
 {
- "asOf": "2026-11-10",
- "updatedAt": "2026-11-11T02:44:47",
+ "asOf": "2026-11-11",
+ "updatedAt": "2026-11-11T20:56:06",
  "counts": {
   "listed": 1088,
   "otc": 892,
-  "esb": 383
+  "esb": 384
  },
- "total": 2363,
+ "total": 2364,
  "sources": {
   "listed_daily": 1087,
   "listed_profile": 1099,
@@ -19,7 +19,7 @@
    },
    "currentMonthCount": 1076,
    "olderMonthCount": 15,
-   "checkedAt": "2026-11-11T02:43:49+08:00",
+   "checkedAt": "2026-11-11T20:55:19+08:00",
    "sources": [
     {
      "url": "https://openapi.twse.com.tw/v1/opendata/t187ap05_L",
@@ -38,8 +38,8 @@
     }
    ]
   },
-  "listed_income": 299,
-  "otc_quotes": 13715,
+  "listed_income": 399,
+  "otc_quotes": 13752,
   "otc_profile": 897,
   "otc_pe": 894,
   "otc_revenue": 899,
@@ -52,11 +52,11 @@
    },
    "currentMonthCount": 897,
    "olderMonthCount": 2,
-   "checkedAt": "2026-11-11T02:44:38+08:00",
+   "checkedAt": "2026-11-11T20:55:55+08:00",
    "sources": [
     {
      "url": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O",
-     "rows": 893,
+     "rows": 897,
      "status": "ok"
     },
     {
@@ -71,24 +71,24 @@
     }
    ]
   },
-  "otc_income": 218,
+  "otc_income": 291,
   "esb_quotes": 369,
   "esb_profile": 369,
-  "esb_revenue": 383,
+  "esb_revenue": 384,
   "esb_revenue_details": {
    "targetMonth": "2026-10",
    "months": {
     "2026-08": 5,
     "2026-09": 10,
-    "2026-10": 368
+    "2026-10": 369
    },
-   "currentMonthCount": 368,
+   "currentMonthCount": 369,
    "olderMonthCount": 15,
-   "checkedAt": "2026-11-11T02:44:47+08:00",
+   "checkedAt": "2026-11-11T20:56:06+08:00",
    "sources": [
     {
      "url": "https://www.tpex.org.tw/openapi/v1/t187ap05_R",
-     "rows": 366,
+     "rows": 368,
      "status": "ok"
     },
     {
@@ -98,14 +98,14 @@
     },
     {
      "url": "https://mopsov.twse.com.tw/nas/t21/rotc/t21sc03_115_10.csv",
-     "rows": 368,
+     "rows": 369,
      "status": "ok"
     }
    ]
   }
  },
- "withPE": 1540,
- "withPS": 2317,
- "withRevenue": 2360,
+ "withPE": 1542,
+ "withPS": 2316,
+ "withRevenue": 2361,
  "withFinancials": 1971
 }
