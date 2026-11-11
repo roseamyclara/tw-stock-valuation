@@ -590,6 +590,10 @@
   function applyFilters() {
     const terms = state.q.toLowerCase().split(/\s+/u).filter(Boolean);
     capHits = new Set();
+    // 純數字搜尋且已命中某支股票代號時，不再用法說會全文把其他股票加進來
+    // （避免來源網址裡的數字片段誤中，例如 6875 命中迅得 6438 的 1458 新聞網址）
+    const qTrim = state.q.trim();
+    const skipCapForNumericCode = /^[0-9]+$/.test(qTrim) && state.rows.some((r) => r.c.includes(qTrim));
     let v = state.rows.filter((r) => {
       if (state.filterMarket && r.m !== state.filterMarket) return false;
       if (state.industry && r.i !== state.industry) return false;
@@ -598,6 +602,7 @@
       if (terms.length && !terms.some(q => r.c.includes(q) || (r.n || "").toLowerCase().includes(q)
                  || tagsOf(r.c).some((t) => t.toLowerCase().includes(q)))) {
         // 代號、名稱、業務標籤都沒命中時，再比對法說會重點
+        if (skipCapForNumericCode) return false;
         const cap = capIndex && capIndex[r.c];
         if (!cap || !terms.some((q) => cap.includes(q))) return false;
         capHits.add(r.c);

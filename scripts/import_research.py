@@ -8,7 +8,7 @@
   meta.json              兩份資料的產生時間、來源、欄位說明、備註，以及有資料的代號清單
   captain/<代號>.json     船長單檔
   ryza/<代號>.json        Ryza 單檔
-  captain_search.json    個股指標搜尋欄用的索引：{代號: 法說會重點各欄文字（以換行串接）}，由 captain/ 單檔產生
+  captain_search.json    個股指標搜尋欄用的索引：{代號: 法說會重點各欄文字（以換行串接）}，由 captain/ 單檔產生；不收網址與重大事件的 source
 
 文字除了去掉第三方法說彙整站的字樣與連結、刪掉提到該站的句子（見 strip_bg）之外原樣保留（含「（推論）」「（自行計算）」與 p14 之類的頁碼）；
 sources 裡指向該站的條目整筆移除；清完變空的字串欄位留空字串，清單裡清完變空的項目移除。
@@ -199,29 +199,46 @@ def write(path: Path, obj) -> None:
     tmp.replace(path)
 
 
-# 搜尋索引只收面板「法說會重點」區塊顯示的文字；代號、名稱、產業、簡報說明、日期與來源不收
+# 搜尋索引只收面板「法說會重點」區塊顯示的文字；代號、名稱、產業、簡報說明、日期、
+# 資料來源、重大事件的 source，以及任何網址（http/https、www. 開頭）都不收
 SEARCH_INDEX = OUT / "captain_search.json"
 SEARCH_SKIP = {"code", "name", "industry", "template", "nodata", "dataDate", "deck", "sources"}
+URL_RE = re.compile(r"https?://[^\s]+|www\.[^\s]+", re.I)
 
 
-def _texts(obj) -> list[str]:
+def _strip_urls(s: str) -> str:
+    """去掉 http/https、www. 開頭的網址，清掉因此留下的多餘空白。"""
+    return re.sub(r"[ \t]{2,}", " ", URL_RE.sub("", s)).strip()
+
+
+def _texts(obj, skip_keys: set[str] | frozenset[str] = frozenset()) -> list[str]:
     if isinstance(obj, str):
-        return [obj] if obj.strip() else []
+        s = _strip_urls(obj)
+        return [s] if s else []
     if isinstance(obj, dict):
-        return [t for v in obj.values() for t in _texts(v)]
+        return [t for k, v in obj.items() if k not in skip_keys for t in _texts(v, skip_keys)]
     if isinstance(obj, list):
-        return [t for v in obj for t in _texts(v)]
+        return [t for v in obj for t in _texts(v, skip_keys)]
     return []
 
 
 def write_search_index() -> int:
-    """從 captain/<代號>.json 產生 captain_search.json；無資料（nodata）的代號不收。"""
+    """從 captain/<代號>.json 產生 captain_search.json；無資料（nodata）的代號不收。
+
+    只重建本索引，不會改寫 captain/、ryza/ 單檔。
+    """
     index = {}
     for f in sorted((OUT / "captain").glob("*.json")):
         rec = json.loads(f.read_text(encoding="utf-8"))
         if rec.get("nodata") or rec.get("template") == "nodata":
             continue
-        text = "\n".join(t for k, v in rec.items() if k not in SEARCH_SKIP for t in _texts(v))
+        parts: list[str] = []
+        for k, v in rec.items():
+            if k in SEARCH_SKIP:
+                continue
+            # 重大事件的 source 常是查證網址，數字片段會誤中其他代號，不收入索引
+            parts.extend(_texts(v, {"source"} if k == "重大事件" else frozenset()))
+        text = "\n".join(parts)
         if text:
             index[f.stem] = text
     write(SEARCH_INDEX, index)
