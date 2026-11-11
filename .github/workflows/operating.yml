@@ -164,5 +164,25 @@ jobs:
             echo "營運指標無變化，跳過 commit"
           else
             git commit -m "更新營運先行指標 $(TZ=Asia/Taipei date +%Y-%m-%d)"
-            git push
+
+            # 本 workflow 約跑 70 分鐘，期間其他排程常推進同一分支；push 被拒時
+            # fetch + rebase 後重試。rebase 衝突以本次重新產生的資料為準（-X theirs
+            # 在 rebase 中指正在重放的本次 commit）。
+            branch="${GITHUB_REF_NAME}"
+            for attempt in 1 2 3 4 5; do
+              if git push origin "HEAD:${branch}"; then
+                echo "push 成功（第 ${attempt} 次）"
+                exit 0
+              fi
+              echo "push 被拒（第 ${attempt} 次），fetch origin/${branch} 後 rebase 重試"
+              git fetch origin "${branch}"
+              if ! git rebase -X theirs "origin/${branch}"; then
+                git rebase --abort || true
+                echo "::error::rebase 到 origin/${branch} 失敗，已 abort；本次營運資料未推送"
+                exit 1
+              fi
+              sleep $((attempt * 5))
+            done
+            echo "::error::push 重試 5 次仍失敗，本次營運資料未推送"
+            exit 1
           fi
