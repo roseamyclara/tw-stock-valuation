@@ -1440,7 +1440,14 @@ footer a:hover { color: var(--accent); text-decoration-color: currentColor; }
 .scr-actions { display: flex; justify-content: flex-end; }
 .scr-actions .more { margin: 0; }
 .scr-rule { font-size: var(--step--1); color: var(--muted); border-top: 1px solid var(--border-soft); padding-top: var(--s-3); }
-.scr-rule summary { cursor: pointer; color: var(--text-secondary); font-weight: 600; min-height: 32px; display: inline-flex; align-items: center; }
+.scr-rule summary { cursor: pointer; color: var(--text-secondary); font-weight: 600; min-height: 32px; display: inline-flex; align-items: center; gap: 10px; list-style: none; }
+.scr-rule summary::-webkit-details-marker { display: none; }
+.scr-rule summary::before {
+  content: ""; width: 6px; height: 6px;
+  border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor;
+  transform: translateY(-2px) rotate(45deg); transition: transform var(--dur) var(--ease); opacity: .7;
+}
+.scr-rule[open] summary::before { transform: translateY(1px) rotate(-135deg); }
 .scr-rule ul { margin: 8px 0 0; padding-left: 1.3em; display: grid; gap: 4px; line-height: 1.7; max-width: 90ch; }
 .scr-rule strong { color: var(--text-secondary); }
 
@@ -1509,6 +1516,11 @@ body.scr-page .wrap, body.scr-page .topbar-in { max-width: none; }
 
   /* 16px 以上避免 iOS 聚焦時自動放大；觸控目標 ≥ 44px */
   .search input, .select select, .scr-form input[type="number"] { font-size: max(16px, 1rem); min-height: var(--hit); }
+  /* 三率篩選：勾選列與「計算規則」整列可點且 ≥ 44px；比率下限列在窄欄可換行 */
+  .scr-check { min-height: var(--hit); flex-wrap: wrap; row-gap: 4px; }
+  .scr-check input[type="checkbox"] { width: 20px; height: 20px; }
+  .scr-check input[type="number"] { margin-left: auto; }
+  .scr-rule summary { min-height: var(--hit); }
   .return-period, .insider-period, .insider-holding-period, .rec-table .return-period { font-size: max(16px, 1rem); min-height: 36px; }
   .seg button { min-height: var(--hit); }
   .column-chip { min-height: var(--hit); }

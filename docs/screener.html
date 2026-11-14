@@ -1,22 +1,36 @@
 <!doctype html>
-<html lang="zh-Hant">
+<html lang="zh-Hant-TW">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#f4f4f7" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#08080c" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0c0e12" media="(prefers-color-scheme: dark)">
 <title>三率篩選｜台股觀測站</title>
 <meta name="description" content="依毛利率、營業利益率、淨利率的季增、年增、連續成長與轉虧為盈篩選台股，資料取自公開資訊觀測站官方公開資料。">
-<link rel="stylesheet" href="assets/style.css?v=20261031-panel">
+<link rel="stylesheet" href="assets/style.css?v=20261115-ui">
+<script>
+/* 先套用使用者存過的深淺色，避免載入時閃一下；完整邏輯在 screener.js */
+(function () {
+  try {
+    var t = localStorage.getItem("theme");
+    if (t !== "light" && t !== "dark") return;
+    var d = document.documentElement;
+    d.setAttribute("data-theme", t);
+    document.querySelector('meta[name="color-scheme"]').setAttribute("content", t);
+    var c = t === "dark" ? "#0c0e12" : "#f6f7f9";
+    document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) { m.setAttribute("content", c); });
+  } catch (_) {}
+})();
+</script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='2' y='2' width='12' height='12' rx='1' fill='%236b7280'/><path d='M3 6h10M3 10h10M7 3v10' stroke='white'/></svg>">
 </head>
 <body class="off-hours scr-page">
 
 <header class="topbar" id="topbar">
   <div class="topbar-in">
-    <a class="brand" href="./">
-      <span class="brand-mark" aria-hidden="true">TW</span>
+    <a class="brand" href="./" aria-label="台股觀測站（回到首頁）">
+      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><rect class="bm-bg" x="1" y="1" width="22" height="22" rx="5"/><path class="bm-line" d="M5 16.5 9.5 11l3.5 3 6-7" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
       <span class="brand-txt">台股觀測站</span>
     </a>
     <span class="asof" id="asof">載入中…</span>
@@ -26,11 +40,12 @@
 
 <div class="wrap" id="top">
 
-  <nav class="page-tabs" aria-label="頁面">
-    <a href="./#stocks">個股指標</a>
-    <a href="./#movers">漲跌幅排行與族群</a>
-    <a href="./#records">創新高與新低榜</a>
-    <a href="screener.html" aria-current="page">三率篩選</a>
+  <!-- 手機顯示短標籤；完整名稱以 .t-full 提供給輔助科技（短標籤 aria-hidden，避免重複朗讀） -->
+  <nav class="page-tabs" aria-label="頁面" style="--tabs:4">
+    <a href="./#stocks"><span class="t-full">個股指標</span><span class="t-short" aria-hidden="true">個股</span></a>
+    <a href="./#movers"><span class="t-full">漲跌幅排行與族群</span><span class="t-short" aria-hidden="true">漲跌排行</span></a>
+    <a href="./#records"><span class="t-full">創新高與新低榜</span><span class="t-short" aria-hidden="true">新高新低</span></a>
+    <a href="screener.html" aria-current="page"><span class="t-full">三率篩選</span><span class="t-short" aria-hidden="true">三率篩選</span></a>
   </nav>
 
   <section class="section page" id="screener">
@@ -72,7 +87,7 @@
         <fieldset class="scr-field">
           <legend>連續成長季數</legend>
           <div class="scr-range">
-            <input type="number" id="grow" min="1" max="8" step="1" placeholder="例：3" aria-label="連續成長季數">
+            <input type="number" inputmode="numeric" id="grow" min="1" max="8" step="1" placeholder="例：3" aria-label="連續成長季數">
             <span class="scr-unit">季</span>
           </div>
         </fieldset>
@@ -80,7 +95,7 @@
         <fieldset class="scr-field">
           <legend>單季營收下限</legend>
           <div class="scr-range">
-            <input type="number" id="rev" min="0" step="any" placeholder="不限" aria-label="單季營收下限（億元）">
+            <input type="number" inputmode="decimal" id="rev" min="0" step="any" placeholder="不限" aria-label="單季營收下限（億元）">
             <span class="scr-unit">億元</span>
           </div>
         </fieldset>
@@ -106,9 +121,9 @@
             <input type="range" id="capHi" min="0" max="1000" step="1" value="1000" aria-label="市值上限滑桿">
           </div>
           <div class="scr-range">
-            <input type="number" id="cmin" min="0" step="any" placeholder="0" aria-label="市值下限（億元）">
+            <input type="number" inputmode="decimal" id="cmin" min="0" step="any" placeholder="0" aria-label="市值下限（億元）">
             <span aria-hidden="true">～</span>
-            <input type="number" id="cmax" min="0" step="any" placeholder="最大" aria-label="市值上限（億元）">
+            <input type="number" inputmode="decimal" id="cmax" min="0" step="any" placeholder="最大" aria-label="市值上限（億元）">
           </div>
         </fieldset>
 
@@ -164,7 +179,7 @@
   </footer>
 </div>
 
-<script src="assets/stock-panel.js?v=20261031-panel"></script>
-<script src="assets/screener.js?v=20261031-seg"></script>
+<script src="assets/stock-panel.js?v=20261115-ui"></script>
+<script src="assets/screener.js?v=20261115-ui"></script>
 </body>
 </html>
