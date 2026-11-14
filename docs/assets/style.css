@@ -301,6 +301,20 @@ p { text-wrap: pretty; }
 .brand-mark svg { display: block; width: 24px; height: 24px; }
 .brand-mark svg .bm-bg { fill: currentColor; }
 .brand-mark svg .bm-line { stroke: var(--accent-ink); }
+/* 品牌旁的市場標記（美股頁） */
+.brand-sub {
+  display: inline-flex;
+  align-items: center;
+  margin-left: -2px;
+  padding: 1px 7px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: var(--step--1);
+  font-weight: 600;
+  line-height: 1.5;
+}
 
 /* 台股／美股切換（美股頁頂欄） */
 .market-nav {

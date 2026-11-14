@@ -64,18 +64,38 @@
     themeBtn.innerHTML = dark ? SUN : MOON;
     themeBtn.setAttribute("aria-label", dark ? "切換為淺色" : "切換為深色");
   };
+  // 瀏覽器列顏色與表單控制項的 color-scheme 跟著主題走（色值與 style.css 的 --page、app.js 一致）
+  const THEME_COLOR = { light: "#f6f7f9", dark: "#0c0e12" };
+  const syncThemeMeta = (t) => {
+    document.querySelector('meta[name="color-scheme"]')?.setAttribute("content", t || "light dark");
+    document.querySelectorAll('meta[name="theme-color"]').forEach((m) => {
+      const own = (m.getAttribute("media") || "").includes("dark") ? THEME_COLOR.dark : THEME_COLOR.light;
+      m.setAttribute("content", t ? THEME_COLOR[t] : own);
+    });
+  };
   const applyTheme = (t) => {
+    if (t !== "light" && t !== "dark") t = null;
     if (t) document.documentElement.setAttribute("data-theme", t);
     else document.documentElement.removeAttribute("data-theme");
+    syncThemeMeta(t);
     paintToggle();
+  };
+  // 支援 View Transitions 且未要求減少動態時才淡入切換，否則直接更新
+  const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const withTransition = (update) => {
+    if (!document.startViewTransition || REDUCED_MOTION.matches || document.hidden) { update(); return; }
+    document.startViewTransition(update);
   };
   try { const saved = localStorage.getItem("theme"); if (saved) applyTheme(saved); } catch (_) {}
   paintToggle();
+  // 未手動選擇時跟隨系統深淺色，切換圖示也要同步
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => {
+    if (!document.documentElement.hasAttribute("data-theme")) paintToggle();
+  });
   themeBtn.addEventListener("click", () => {
     const next = isDarkNow() ? "light" : "dark";
-    applyTheme(next);
     try { localStorage.setItem("theme", next); } catch (_) {}
-    renderTiles();
+    withTransition(() => { applyTheme(next); renderTiles(); });
   });
 
   // ---------------------------------------------------------------- 頂欄與回頂端

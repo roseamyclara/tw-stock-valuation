@@ -1,35 +1,52 @@
 <!doctype html>
-<html lang="zh-Hant">
+<html lang="zh-Hant-TW">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#f4f4f7" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#08080c" media="(prefers-color-scheme: dark)">
-<title>美股估值追蹤 — 本益比、股價營收比與季度成長率</title>
+<meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0c0e12" media="(prefers-color-scheme: dark)">
+<title>美股估值追蹤｜台股觀測站</title>
 <meta name="description" content="美國上市公司的本益比、股價營收比、淨值比與季度營收／獲利成長率，財報取自 SEC EDGAR 官方 XBRL 開放資料，每交易日自動更新。">
-<link rel="stylesheet" href="assets/style.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>📈</text></svg>">
+<link rel="stylesheet" href="assets/style.css?v=20261115-ui">
+<script>
+/* 先套用使用者存過的深淺色，避免載入時閃一下；完整邏輯在 us.js */
+(function () {
+  try {
+    var t = localStorage.getItem("theme");
+    if (t !== "light" && t !== "dark") return;
+    var d = document.documentElement;
+    d.setAttribute("data-theme", t);
+    document.querySelector('meta[name="color-scheme"]').setAttribute("content", t);
+    var c = t === "dark" ? "#0c0e12" : "#f6f7f9";
+    document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) { m.setAttribute("content", c); });
+  } catch (_) {}
+})();
+</script>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='2' y='2' width='12' height='12' rx='1' fill='%236b7280'/><path d='M3 6h10M3 10h10M7 3v10' stroke='white'/></svg>">
 </head>
 <body>
 
 <header class="topbar" id="topbar">
   <div class="topbar-in">
-    <a class="brand" href="./">
-      <span class="brand-mark" aria-hidden="true">TW</span>
-      <span class="brand-txt">估值追蹤</span>
+    <a class="brand" href="./" aria-label="台股觀測站 美股（回到首頁）">
+      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><rect class="bm-bg" x="1" y="1" width="22" height="22" rx="5"/><path class="bm-line" d="M5 16.5 9.5 11l3.5 3 6-7" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      <span class="brand-txt">台股觀測站</span>
+      <span class="brand-sub">美股</span>
     </a>
-    <nav class="market-nav" aria-label="選擇市場">
-      <a href="./">台股</a>
-      <a href="us.html" aria-current="page">美股</a>
-      <a href="screener.html">三率篩選</a>
-    </nav>
     <span class="asof" id="asof">載入中…</span>
     <button class="icon-btn" id="themeToggle" type="button" aria-label="切換深淺色"></button>
   </div>
 </header>
 
 <div class="wrap" id="top">
+
+  <!-- 台股／美股／三率篩選切換。手機顯示短標籤；完整名稱以 .t-full 提供給輔助科技 -->
+  <nav class="page-tabs" aria-label="選擇市場與頁面" style="--tabs:3">
+    <a href="./"><span class="t-full">台股估值</span><span class="t-short" aria-hidden="true">台股</span></a>
+    <a href="us.html" aria-current="page"><span class="t-full">美股估值</span><span class="t-short" aria-hidden="true">美股</span></a>
+    <a href="screener.html"><span class="t-full">三率篩選</span><span class="t-short" aria-hidden="true">三率篩選</span></a>
+  </nav>
 
   <section class="hero">
     <h1>美股<br>現在貴不貴</h1>
@@ -127,6 +144,6 @@
 <div class="counterapi" ns="roseamyclara.github.io" action="view" key="tw-stock-valuation" invisible="true" aria-hidden="true"></div>
 <div class="counterapi" ns="roseamyclara.github.io" action="visitor" key="tw-stock-valuation" unique="true" invisible="true" aria-hidden="true"></div>
 
-<script src="assets/us.js"></script>
+<script src="assets/us.js?v=20261115-ui"></script>
 </body>
 </html>
