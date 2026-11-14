@@ -1,14 +1,28 @@
 <!doctype html>
-<html lang="zh-Hant">
+<html lang="zh-Hant-TW">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#f4f4f7" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#08080c" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0c0e12" media="(prefers-color-scheme: dark)">
 <title>台股觀測站｜價格、產業與估值</title>
 <meta name="description" content="台灣股市上市、上櫃、興櫃的估值、營收、合約負債與存貨趨勢追蹤，資料取自證交所、櫃買中心與公開資訊觀測站官方公開資料。">
-<link rel="stylesheet" href="assets/style.css?v=20261110-capsearch">
+<link rel="stylesheet" href="assets/style.css?v=20261115-ui">
+<script>
+/* 先套用使用者存過的深淺色，避免載入時閃一下；完整邏輯在 app.js */
+(function () {
+  try {
+    var t = localStorage.getItem("theme");
+    if (t !== "light" && t !== "dark") return;
+    var d = document.documentElement;
+    d.setAttribute("data-theme", t);
+    document.querySelector('meta[name="color-scheme"]').setAttribute("content", t);
+    var c = t === "dark" ? "#0c0e12" : "#f6f7f9";
+    document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) { m.setAttribute("content", c); });
+  } catch (_) {}
+})();
+</script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='2' y='2' width='12' height='12' rx='1' fill='%236b7280'/><path d='M3 6h10M3 10h10M7 3v10' stroke='white'/></svg>">
 </head>
 <body class="off-hours">
@@ -16,8 +30,8 @@
 <!-- ============ 頂欄 ============ -->
 <header class="topbar" id="topbar">
   <div class="topbar-in">
-    <a class="brand" href="#top">
-      <span class="brand-mark" aria-hidden="true">TW</span>
+    <a class="brand" href="#top" aria-label="台股觀測站（回到頁首）">
+      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><rect class="bm-bg" x="1" y="1" width="22" height="22" rx="5"/><path class="bm-line" d="M5 16.5 9.5 11l3.5 3 6-7" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
       <span class="brand-txt">台股觀測站</span>
     </a>
     <span class="asof" id="asof">載入中…</span>
@@ -28,11 +42,12 @@
 <div class="wrap" id="top">
 
 
-  <nav class="page-tabs" aria-label="頁面">
-    <a href="#stocks" data-page="stocks" aria-current="page">個股指標</a>
-    <a href="#movers" data-page="movers">漲跌幅排行與族群</a>
-    <a href="#records" data-page="records">創新高與新低榜</a>
-    <a href="screener.html">三率篩選</a>
+  <!-- 手機顯示短標籤；完整名稱以 .t-full 提供給輔助科技（短標籤 aria-hidden，避免重複朗讀） -->
+  <nav class="page-tabs" aria-label="頁面" style="--tabs:4">
+    <a href="#stocks" data-page="stocks" aria-current="page"><span class="t-full">個股指標</span><span class="t-short" aria-hidden="true">個股</span></a>
+    <a href="#movers" data-page="movers"><span class="t-full">漲跌幅排行與族群</span><span class="t-short" aria-hidden="true">漲跌排行</span></a>
+    <a href="#records" data-page="records"><span class="t-full">創新高與新低榜</span><span class="t-short" aria-hidden="true">新高新低</span></a>
+    <a href="screener.html"><span class="t-full">三率篩選</span><span class="t-short" aria-hidden="true">三率篩選</span></a>
   </nav>
 
   <!-- ============ 漲跌幅排行與族群 ============ -->
@@ -91,10 +106,10 @@
     <div class="card">
       <h3 class="card-h" id="recordTitle">股價創歷史新高</h3>
       <p class="note" id="recordRule"></p>
-      <div class="column-picker" aria-label="自訂榜單欄位">
-        <div class="column-picker-heading"><strong>可選欄位</strong><span>點選或拖入下方表格即可加入，把表頭拖回此區即可移除。</span></div>
-        <div id="recordPool" class="column-zone" role="group" aria-label="可選欄位，拖回此處移除"></div>
-      </div>
+      <details class="column-picker" id="recordPicker">
+        <summary class="column-picker-heading"><strong><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>可選欄位</strong><span class="cp-meta" id="recordPoolMeta"></span><span class="cp-hint">點選或拖入表格即可加入，把表頭拖回此區即可移除</span><span class="cp-chev" aria-hidden="true"></span></summary>
+        <div id="recordPool" class="column-zone" role="group" aria-label="可選榜單欄位，拖回此處移除"></div>
+      </details>
       <div class="table-shell"><div class="table-scroll" tabindex="0" role="region" aria-label="榜單表格，可上下左右捲動">
         <table class="rec-table"><thead><tr id="recordHead"></tr></thead><tbody id="recordBody"></tbody></table>
       </div></div>
@@ -113,7 +128,7 @@
       <div class="filters">
         <div class="search">
           <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.8"/><path d="m13.5 13.5 3.5 3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-          <input type="search" id="q" placeholder="搜尋代號、名稱、業務標籤或法說會重點，多個條件以空格分隔" aria-label="搜尋代號、名稱、業務標籤或法說會重點，多個條件以空格分隔">
+          <input type="search" id="q" placeholder="代號、名稱、標籤或法說會" enterkeyhint="search" autocomplete="off" aria-label="搜尋代號、名稱、業務標籤或法說會重點，多個條件以空格分隔">
         </div>
         <div class="seg" id="marketSeg" role="group" aria-label="選擇市場" style="--n:4">
           <button type="button" data-market="" aria-pressed="true">全部</button>
@@ -124,20 +139,23 @@
         <div class="select">
           <select id="industry" aria-label="選擇產業"><option value="">所有產業</option></select>
         </div>
-        <label class="select return-mobile">漲跌幅期間
+        <div class="select select-prefixed return-mobile" style="--pre-w:2.6em">
+          <span class="select-pre" aria-hidden="true">期間</span>
           <select id="returnPeriodMobile" aria-label="選擇漲跌幅期間"></select>
-        </label>
-        <div class="select sort-mobile">
+        </div>
+        <div class="select select-prefixed sort-mobile" style="--pre-w:2.6em">
+          <span class="select-pre" aria-hidden="true">排序</span>
           <select id="sortMobile" aria-label="排序依據"></select>
         </div>
       </div>
     </div>
 
-    <div class="column-picker" aria-label="自訂表格欄位">
-      <div class="column-picker-heading"><strong>可選欄位</strong><span>拖入下方表格即可加入，拖回此區即可移除；也可直接點選欄位名稱。</span></div>
+    <!-- 可選欄位：手機預設收合（app.js 依視窗寬度決定），避免一大片標籤擋住個股清單 -->
+    <details class="column-picker" id="columnPicker">
+      <summary class="column-picker-heading"><strong><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>可選欄位</strong><span class="cp-meta" id="columnPoolMeta"></span><span class="cp-hint">點選或拖入表格即可加入，拖回此區即可移除</span><span class="cp-chev" aria-hidden="true"></span></summary>
       <div id="columnPool" class="column-zone" role="group" aria-label="可選欄位，拖回此處移除"></div>
-      <span id="columnStatus" class="sr-only" role="status"></span>
-    </div>
+    </details>
+    <span id="columnStatus" class="sr-only" role="status"></span>
     <div class="table-tools">
       <span id="tableScrollHint" class="table-hint"></span>
       <div class="table-nav" role="group" aria-label="捲動表格">
@@ -186,13 +204,13 @@
 <div class="counterapi" ns="roseamyclara.github.io" action="view" key="tw-stock-valuation" invisible="true" aria-hidden="true"></div>
 <div class="counterapi" ns="roseamyclara.github.io" action="visitor" key="tw-stock-valuation" unique="true" invisible="true" aria-hidden="true"></div>
 
-<script src="assets/stock-panel.js?v=20261031-panel"></script>
-<script src="assets/app.js?v=20261112-capsearch"></script>
-<script src="assets/op-ui.js?v=20261007-select-redraw-fix"></script>
-<script src="assets/insider.js?v=20261018-finhist"></script>
-<script src="assets/op-layout-fix.js?v=20261008-insider-visible"></script>
-<script src="assets/supabase-config.js?v=20261020-live"></script>
-<script src="assets/visit.js?v=20261020"></script>
-<script src="assets/receipts-hide.js?v=20261031-panel"></script>
+<script src="assets/stock-panel.js?v=20261115-ui"></script>
+<script src="assets/app.js?v=20261115-ui"></script>
+<script src="assets/op-ui.js?v=20261115-ui"></script>
+<script src="assets/insider.js?v=20261115-ui"></script>
+<script src="assets/op-layout-fix.js?v=20261115-ui"></script>
+<script src="assets/supabase-config.js?v=20261115-ui"></script>
+<script src="assets/visit.js?v=20261115-ui"></script>
+<script src="assets/receipts-hide.js?v=20261115-ui"></script>
 </body>
 </html>

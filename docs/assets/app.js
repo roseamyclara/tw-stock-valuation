@@ -125,11 +125,31 @@
     themeBtn.innerHTML = dark ? SUN : MOON;
     themeBtn.setAttribute("aria-label", dark ? "切換為淺色" : "切換為深色");
   };
+  // 瀏覽器列顏色與表單控制項的 color-scheme 跟著主題走（色值與 style.css 的 --page 一致）
+  const THEME_COLOR = { light: "#f6f7f9", dark: "#0c0e12" };
+  const syncThemeMeta = (t) => {
+    document.querySelector('meta[name="color-scheme"]')?.setAttribute("content", t || "light dark");
+    document.querySelectorAll('meta[name="theme-color"]').forEach((m) => {
+      const own = (m.getAttribute("media") || "").includes("dark") ? THEME_COLOR.dark : THEME_COLOR.light;
+      m.setAttribute("content", t ? THEME_COLOR[t] : own);
+    });
+  };
   const applyTheme = (t) => {
+    if (t !== "light" && t !== "dark") t = null;
     if (t) document.documentElement.setAttribute("data-theme", t);
     else document.documentElement.removeAttribute("data-theme");
+    syncThemeMeta(t);
     paintToggle();
   };
+  // 同頁轉場：支援 View Transitions 且未要求減少動態時才使用，否則直接更新
+  const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const withTransition = (update) => {
+    if (!document.startViewTransition || REDUCED_MOTION.matches || document.hidden) { update(); return; }
+    document.startViewTransition(update);
+  };
+
+  // 可選欄位：桌機預設展開；860px 以下預設收合，讓個股清單先出現在畫面上
+  if (!MOBILE.matches) for (const id of ["columnPicker", "recordPicker"]) { const d = $(id); if (d) d.open = true; }
   try {
     const saved = localStorage.getItem("theme");
     if (saved) applyTheme(saved);
@@ -137,9 +157,8 @@
   paintToggle();
   themeBtn.addEventListener("click", () => {
     const next = isDarkNow() ? "light" : "dark";
-    applyTheme(next);
     try { localStorage.setItem("theme", next); } catch (_) {}
-    draw();
+    withTransition(() => { applyTheme(next); draw(); });
   });
 
   // ---------------------------------------------------------------- 分頁
@@ -157,7 +176,7 @@
     if (page === "movers") renderMovers();
     window.scrollTo(0, 0);
   }
-  window.addEventListener("hashchange", showPage);
+  window.addEventListener("hashchange", () => withTransition(showPage));
 
   // ---------------------------------------------------------------- 頂欄與回頂端
   const topbar = $("topbar");
@@ -372,11 +391,12 @@
       draggedColumn = key;
       e.dataTransfer.setData("text/plain", key);
       e.dataTransfer.effectAllowed = "move";
-      document.querySelector(".column-picker")?.classList.add("is-dragging");
+      const picker = $("columnPicker");
+      if (picker) { picker.open = true; picker.classList.add("is-dragging"); }
     });
     el.addEventListener("dragend", () => {
       draggedColumn = null;
-      document.querySelector(".column-picker")?.classList.remove("is-dragging");
+      $("columnPicker")?.classList.remove("is-dragging");
       document.querySelectorAll(".drop-active").forEach(n => n.classList.remove("drop-active"));
     });
   }
@@ -406,6 +426,8 @@
     const pool = $("columnPool");
     if (!pool) return;
     const available = COLS.filter(c => !FIXED_COLUMNS.includes(c.k) && !state.selectedColumns.includes(c.k));
+    const meta = $("columnPoolMeta");
+    if (meta) meta.textContent = available.length ? `${available.length} 項可加入` : "已全部加入";
     pool.innerHTML = available.map(c => `<button type="button" class="column-chip" draggable="true" data-column="${c.k}" aria-label="加入${columnLabel(c)}">＋ ${columnLabel(c)}</button>`).join("") || '<span class="column-empty">所有欄位都已加入；拖曳表頭到此處即可移除</span>';
     pool.querySelectorAll("[data-column]").forEach(el => {
       const key = el.dataset.column;
@@ -915,6 +937,8 @@
     const pool = $("recordPool");
     const on = new Set(shown.map((c) => c.k));
     const avail = all.filter((c) => !c.fixed && !on.has(c.k));
+    const meta = $("recordPoolMeta");
+    if (meta) meta.textContent = avail.length ? `${avail.length} 項可加入` : "已全部加入";
     pool.innerHTML = avail.map((c) =>
       `<button type="button" class="column-chip" draggable="true" data-rec-col="${c.k}" aria-label="加入${esc(c.t)}">＋ ${esc(c.t)}</button>`).join("")
       || '<span class="column-empty">所有欄位都已加入；拖曳表頭到此處即可移除</span>';
@@ -991,6 +1015,8 @@
     $("recordReturn")?.addEventListener("change", (e) => { state.recordReturn = e.target.value; renderRecords(); });
     $("recordHead").querySelectorAll("th.rec-extra").forEach((th) => th.addEventListener("dragstart", (e) => {
       e.dataTransfer.setData("text/plain", "rec:" + th.dataset.k);
+      const picker = $("recordPicker");
+      if (picker) picker.open = true;   // 收合時也要能把表頭拖回可選欄位
     }));
     $("recordBody").querySelectorAll("tr[data-c]").forEach((tr) =>
       tr.addEventListener("click", (e) => { if (!e.target.closest("a")) openStock(tr.dataset.c); }));

@@ -1510,9 +1510,13 @@ body.scr-page .wrap, body.scr-page .topbar-in { max-width: none; }
   /* 16px 以上避免 iOS 聚焦時自動放大；觸控目標 ≥ 44px */
   .search input, .select select, .scr-form input[type="number"] { font-size: max(16px, 1rem); min-height: var(--hit); }
   .return-period, .insider-period, .insider-holding-period, .rec-table .return-period { font-size: max(16px, 1rem); min-height: 36px; }
-  .seg button { min-height: 38px; }
-  .column-chip { min-height: 40px; }
+  .seg button { min-height: var(--hit); }
+  .column-chip { min-height: var(--hit); }
   .more { min-height: var(--hit); }
+  .clear-filter { min-height: var(--hit); }
+  /* 收合列只留標題、數量與箭頭，說明文字在桌機才顯示 */
+  .column-picker-heading .cp-hint { display: none; }
+  .filters .select-pre { font-size: var(--step--1); }
 
   .overlay { align-items: flex-end; justify-content: center; }
   .panel {
