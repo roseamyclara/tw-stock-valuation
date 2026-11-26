@@ -1,6 +1,6 @@
 {
- "asOf": "2026-11-25",
- "updatedAt": "2026-11-26T04:32:20",
+ "asOf": "2026-11-26",
+ "updatedAt": "2026-11-26T23:41:25",
  "counts": {
   "listed": 1088,
   "otc": 892,
@@ -18,7 +18,7 @@
    },
    "currentMonthCount": 1091,
    "olderMonthCount": 0,
-   "checkedAt": "2026-11-26T04:31:39+08:00",
+   "checkedAt": "2026-11-26T23:39:29+08:00",
    "sources": [
     {
      "url": "https://openapi.twse.com.tw/v1/opendata/t187ap05_L",
@@ -37,10 +37,10 @@
     }
    ]
   },
-  "listed_income": 1077,
-  "otc_quotes": 13830,
-  "otc_profile": 898,
-  "otc_pe": 894,
+  "listed_income": 1078,
+  "otc_quotes": 13832,
+  "otc_profile": 899,
+  "otc_pe": 895,
   "otc_revenue": 901,
   "otc_revenue_details": {
    "targetMonth": "2026-10",
@@ -51,7 +51,7 @@
    },
    "currentMonthCount": 899,
    "olderMonthCount": 2,
-   "checkedAt": "2026-11-26T04:32:11+08:00",
+   "checkedAt": "2026-11-26T23:41:13+08:00",
    "sources": [
     {
      "url": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O",
@@ -60,8 +60,9 @@
     },
     {
      "url": "https://mopsov.twse.com.tw/nas/t21/otc/t21sc03_115_9.csv",
-     "rows": 899,
-     "status": "ok"
+     "rows": 0,
+     "status": "unavailable",
+     "error": "https://mopsov.twse.com.tw/nas/t21/otc/t21sc03_115_9.csv: HTTPSConnectionPool(host='mopsov.twse.com.tw', port=443): Max retries exceeded with url: /nas/t21/otc/t21sc03_115_9.csv (Caused by ConnectTimeoutError(<HTTPSConnection(host='mopsov.twse.com.tw', port=443) at 0x7dd8bef7a2a0>, 'Connection to mopsov.twse.com.tw timed out. (connect timeout=25)'))"
     },
     {
      "url": "https://mopsov.twse.com.tw/nas/t21/otc/t21sc03_115_10.csv",
@@ -70,9 +71,9 @@
     }
    ]
   },
-  "otc_income": 901,
-  "esb_quotes": 378,
-  "esb_profile": 378,
+  "otc_income": 902,
+  "esb_quotes": 377,
+  "esb_profile": 377,
   "esb_revenue": 389,
   "esb_revenue_details": {
    "targetMonth": "2026-10",
@@ -83,7 +84,7 @@
    },
    "currentMonthCount": 375,
    "olderMonthCount": 14,
-   "checkedAt": "2026-11-26T04:32:20+08:00",
+   "checkedAt": "2026-11-26T23:41:25+08:00",
    "sources": [
     {
      "url": "https://www.tpex.org.tw/openapi/v1/t187ap05_R",
@@ -104,7 +105,7 @@
   }
  },
  "withPE": 1535,
- "withPS": 2322,
+ "withPS": 2321,
  "withRevenue": 2366,
  "withFinancials": 1971
 }
