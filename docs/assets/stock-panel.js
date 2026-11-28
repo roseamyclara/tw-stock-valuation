@@ -256,7 +256,7 @@
 
   // ---------------------------------------------------------------- 隊友調查（法說會重點、興櫃新登錄）
   // meta.json 列出有資料的代號；只對清單內的代號抓單檔，不產生 404。
-  // 文字一律原樣顯示（含「（推論）」與頁碼），只做跳脫與網址轉連結；不顯示資料來源、彙整時間與簡報說明。
+  // 文字一律原樣顯示（含「（推論）」與頁碼），只做跳脫與網址轉連結；法說會重點標題附簡報日期；不顯示資料來源與彙整時間。
   // 放在「最新法說會簡報」連結正下方（沒有該連結時放在估值數字下方的同一位置）。
   const rsMeta = () => data.researchMeta ||
     (data.researchMeta = getJSON("data/research/meta.json", null).then((m) => {
@@ -296,7 +296,7 @@
   ].join("");
 
   function renderCaptain(r) {
-    const head = `<h4>法說會重點</h4>`;
+    const head = `<h4>法說會重點${r.dataDate ? ` · ${esc(String(r.dataDate).replace(/-/g, '/'))}` : ''}</h4>`;
     if (r.nodata || r.template === "nodata") return `${head}<p class="note">尚無法說會資料。</p>`;
     return head + [
       rsBlock("產業及產品", rsTags(r["產業及產品"])),
